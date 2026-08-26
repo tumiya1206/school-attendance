@@ -11,51 +11,83 @@
 </head>
 <body class="bg-gray-50 p-6">
   <div class="max-w-7xl mx-auto space-y-6">
-    <div class="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-2xl shadow-sm gap-4">
+    
+    <!-- 頁頭與控制區 -->
+    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-6 rounded-2xl shadow-sm gap-4">
       <div>
         <h1 class="text-3xl font-bold text-gray-800">全校晨間點名儀表板</h1>
-        <p id="currentDate" class="text-lg font-semibold text-blue-600 mt-1"></p>
+        <p class="text-sm text-gray-500 mt-1">即時檢視、歷史查詢與單月資料匯出</p>
       </div>
 
-      <!-- 月份選擇與匯出 Excel 區 -->
-      <div class="bg-gray-100 p-4 rounded-xl flex items-center gap-3">
-        <div>
-          <label class="block text-xs font-bold text-gray-500 mb-1">選擇匯出月份</label>
-          <input type="month" id="monthPicker" class="p-2 border border-gray-300 rounded-lg text-sm">
+      <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+        <!-- 📅 歷史日期查詢區 -->
+        <div class="bg-blue-50 p-3 rounded-xl border border-blue-200 flex items-center gap-2">
+          <div>
+            <label class="block text-xs font-bold text-blue-800 mb-1">📅 選擇查詢日期</label>
+            <input type="date" id="datePicker" onchange="changeSearchDate(this.value)" class="p-2 border border-blue-300 rounded-lg text-sm bg-white font-semibold outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+          <button onclick="setToday()" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-2 rounded-lg text-xs shadow transition">
+            今天
+          </button>
         </div>
-        <button onclick="exportMonthlyCSV()" class="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-sm shadow transition">
-          📊 匯出單月 Excel 總表
-        </button>
+
+        <!-- 📊 月份選擇與匯出 Excel 區 -->
+        <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-200 flex items-center gap-2">
+          <div>
+            <label class="block text-xs font-bold text-emerald-800 mb-1">📊 匯出月份總表</label>
+            <input type="month" id="monthPicker" class="p-2 border border-emerald-300 rounded-lg text-sm bg-white font-semibold outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <button onclick="exportMonthlyCSV()" class="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-lg text-xs shadow transition">
+            下載 CSV
+          </button>
+        </div>
       </div>
+    </div>
+
+    <!-- 顯示當前檢視的日期區 -->
+    <div class="flex items-center justify-between bg-blue-600 text-white p-4 rounded-xl shadow-md">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">🔍</span>
+        <span class="font-bold text-lg">目前檢視日期：</span>
+        <span id="selectedDateDisplay" class="text-xl font-extrabold underline decoration-yellow-400"></span>
+      </div>
+      <span id="todayBadge" class="bg-yellow-400 text-gray-900 font-bold px-3 py-1 rounded-full text-xs" style="display:none;">今日最新</span>
     </div>
 
     <!-- 頂部數據卡片 -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div class="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-blue-500">
-        <div class="text-sm text-gray-500 font-bold">今日已回報班級</div>
+        <div class="text-sm text-gray-500 font-bold">該日已回報班級</div>
         <div id="reportedCount" class="text-3xl font-bold text-gray-800 mt-2">0 / 9 班</div>
       </div>
       <div class="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-green-500">
-        <div class="text-sm text-gray-500 font-bold">今日全校出席率</div>
+        <div class="text-sm text-gray-500 font-bold">該日全校出席率</div>
         <div id="attendanceRate" class="text-3xl font-bold text-gray-800 mt-2">0%</div>
       </div>
       <div class="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-red-500">
-        <div class="text-sm text-gray-500 font-bold">今日全校總缺席人數</div>
+        <div class="text-sm text-gray-500 font-bold">該日全校總缺席人數</div>
         <div id="totalAbsentCount" class="text-3xl font-bold text-red-600 mt-2">0 人</div>
       </div>
     </div>
 
-    <!-- 今日總覽表格 -->
+    <!-- 指定日期各班明細表格 -->
     <div class="bg-white p-6 rounded-2xl shadow-sm">
-      <h2 class="text-xl font-bold text-gray-800 mb-4">今日各班狀態</h2>
-      <table class="w-full text-left border-collapse">
-        <thead>
-          <tr class="border-b bg-gray-50 text-gray-600 text-sm">
-            <th class="p-3">班級</th><th class="p-3">狀態</th><th class="p-3">出席 / 應到</th><th class="p-3">缺席座號</th>
-          </tr>
-        </thead>
-        <tbody id="todayTableBody" class="divide-y text-gray-700"></tbody>
-      </table>
+      <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+        <span>📋</span> <span id="tableTitleDate"></span> 各班點名紀錄明細
+      </h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b bg-gray-50 text-gray-600 text-sm">
+              <th class="p-3">班級</th>
+              <th class="p-3">狀態</th>
+              <th class="p-3">出席 / 應到</th>
+              <th class="p-3">缺席座號與人數</th>
+            </tr>
+          </thead>
+          <tbody id="todayTableBody" class="divide-y text-gray-700"></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- 分析圖表區 -->
@@ -85,18 +117,49 @@
     const db = firebase.firestore();
 
     const classList = ['一年一班','二年一班','三年一班','四年一班','四年二班','五年一班','五年二班','六年一班','六年二班'];
-    const todayStr = new Date().toISOString().split('T')[0];
-    document.getElementById('currentDate').textContent = `日期：${todayStr}`;
-    document.getElementById('monthPicker').value = todayStr.substring(0, 7);
+    const realTodayStr = new Date().toISOString().split('T')[0];
+    let currentQueryDate = realTodayStr;
+    let unsubscribe = null;
 
-    // 即時監聽今日紀錄
-    db.collection('attendance').where('date', '==', todayStr).onSnapshot(snapshot => {
-      const records = {};
-      snapshot.forEach(doc => { records[doc.data().className] = doc.data(); });
-      renderTodayTable(records);
-    });
+    window.onload = function() {
+      document.getElementById('datePicker').value = realTodayStr;
+      document.getElementById('monthPicker').value = realTodayStr.substring(0, 7);
+      listenDateRecords(realTodayStr);
+      loadCharts();
+    };
 
-    function renderTodayTable(records) {
+    function setToday() {
+      document.getElementById('datePicker').value = realTodayStr;
+      changeSearchDate(realTodayStr);
+    }
+
+    function changeSearchDate(selectedDate) {
+      if (!selectedDate) return;
+      currentQueryDate = selectedDate;
+      listenDateRecords(selectedDate);
+    }
+
+    function listenDateRecords(targetDate) {
+      document.getElementById('selectedDateDisplay').textContent = targetDate;
+      document.getElementById('tableTitleDate').textContent = targetDate;
+      
+      const badge = document.getElementById('todayBadge');
+      if (targetDate === realTodayStr) {
+        badge.style.display = 'inline-block';
+      } else {
+        badge.style.display = 'none';
+      }
+
+      if (unsubscribe) unsubscribe();
+
+      unsubscribe = db.collection('attendance').where('date', '==', targetDate).onSnapshot(snapshot => {
+        const records = {};
+        snapshot.forEach(doc => { records[doc.data().className] = doc.data(); });
+        renderTableAndCards(records);
+      });
+    }
+
+    function renderTableAndCards(records) {
       const tbody = document.getElementById('todayTableBody');
       tbody.innerHTML = '';
       let reportedNum = 0, totalPresent = 0, totalStudents = 0, totalAbsent = 0;
@@ -113,9 +176,9 @@
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td class="p-3 font-semibold">${c}</td>
-          <td class="p-3">${isReported ? '<span class="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">✅ 已回報</span>' : '<span class="bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs font-bold">❌ 未回報</span>'}</td>
+          <td class="p-3">${isReported ? '<span class="bg-green-100 text-green-700 px-2.5 py-1 rounded-full text-xs font-bold">✅ 已回報</span>' : '<span class="bg-gray-100 text-gray-500 px-2.5 py-1 rounded-full text-xs font-bold">❌ 未回報</span>'}</td>
           <td class="p-3">${isReported ? `${rec.presentCount} / ${rec.totalCount} 人` : '-'}</td>
-          <td class="p-3 text-red-600 font-bold">${isReported ? (rec.absentList.length > 0 ? rec.absentList.join(', ') : '無') : '-'}</td>
+          <td class="p-3 text-red-600 font-bold">${isReported ? (rec.absentList && rec.absentList.length > 0 ? `${rec.absentList.join(', ')} (${rec.absentCount}人)` : '全員到齊') : '-'}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -125,7 +188,7 @@
       document.getElementById('attendanceRate').textContent = totalStudents > 0 ? `${((totalPresent / totalStudents) * 100).toFixed(1)}%` : '0%';
     }
 
-    // 匯出指定月份 CSV Excel 總表
+    // 匯出指定月份 CSV Excel 總表（包含精確班級排序）
     async function exportMonthlyCSV() {
       const selectedMonth = document.getElementById('monthPicker').value;
       if (!selectedMonth) {
@@ -142,7 +205,19 @@
       let csvContent = "\uFEFF日期,班級,應到人數,出席人數,缺席人數,缺席座號\n";
       let records = snapshot.docs.map(doc => doc.data());
 
-      records.sort((a, b) => a.date.localeCompare(b.date) || a.className.localeCompare(b.className));
+      // 自訂班級權重索引，確保依一年一班 -> 六年二班排序
+      const getClassOrder = (name) => {
+        const index = classList.indexOf(name);
+        return index !== -1 ? index : 999;
+      };
+
+      // 排序邏輯：先比日期 (舊 -> 新)，日期相同時再依班級階層 (低 -> 高)
+      records.sort((a, b) => {
+        if (a.date !== b.date) {
+          return a.date.localeCompare(b.date);
+        }
+        return getClassOrder(a.className) - getClassOrder(b.className);
+      });
 
       records.forEach(r => {
         const absentStr = r.absentList && r.absentList.length > 0 ? r.absentList.join(' ') : '無';
@@ -158,7 +233,6 @@
       document.body.removeChild(link);
     }
 
-    // 繪製統計圖表
     async function loadCharts() {
       const snapshot = await db.collection('attendance').get();
       const allData = snapshot.docs.map(doc => doc.data());
@@ -176,7 +250,7 @@
         data: { labels: last7Days, datasets: [{ label: '缺席總人數', data: Object.values(dailyMap), borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.3 }] }
       });
 
-      const currentMonth = todayStr.substring(0, 7);
+      const currentMonth = realTodayStr.substring(0, 7);
       const classMap = {}; classList.forEach(c => classMap[c] = 0);
       allData.filter(d => d.date && d.date.startsWith(currentMonth)).forEach(d => { if (classMap[d.className] !== undefined) classMap[d.className] += d.absentCount; });
 
@@ -185,7 +259,6 @@
         data: { labels: classList, datasets: [{ label: '本月累計缺席次數', data: Object.values(classMap), backgroundColor: '#ef4444' }] }
       });
     }
-    loadCharts();
   </script>
 </body>
 </html>
