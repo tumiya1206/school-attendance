@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>全校晨間點名系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+  <div class="max-w-md mx-auto bg-white rounded-2xl shadow-md p-6">
+    <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">班級晨間點名</h2>
+    
+    <div class="space-y-4 mb-6">
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">1. 選擇班級</label>
+        <select id="classSelect" onchange="checkAndGenerate()" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+          <option value="">-- 請選擇班級 --</option>
+          <option value="一年一班">一年一班</option>
+          <option value="二年一班">二年一班</option>
+          <option value="三年一班">三年一班</option>
+          <option value="四年一班">四年一班</option>
+          <option value="四年二班">四年二班</option>
+          <option value="五年一班">五年一班</option>
+          <option value="五年二班">五年二班</option>
+          <option value="六年一班">六年一班</option>
+          <option value="六年二班">六年二班</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">2. 選擇該班人數 (18~28人)</label>
+        <select id="countSelect" onchange="checkAndGenerate()" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"></select>
+      </div>
+    </div>
+
+    <div id="info" class="text-center text-sm text-gray-500 mb-4">請先選擇班級與班級人數</div>
+    <div id="studentGrid" class="grid grid-cols-5 gap-2 mb-6"></div>
+
+    <button id="submitBtn" onclick="submit()" style="display:none;" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition">
+      提交今日點名紀錄
+    </button>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBqdSFkDkjka6hewD9hEfY39KIErVonz1I",
+      authDomain: "school-attendance-5c91c.firebaseapp.com",
+      projectId: "school-attendance-5c91c",
+      storageBucket: "school-attendance-5c91c.firebasestorage.app",
+      messagingSenderId: "3254054266",
+      appId: "1:3254054266:web:246cd39b057a916ebafac3",
+      measurementId: "G-PRV1QQM6ML"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let seatsData = [];
+
+    window.onload = function() {
+      const countSelect = document.getElementById('countSelect');
+      for (let i = 18; i <= 28; i++) {
+        let opt = document.createElement('option');
+        opt.value = i; opt.textContent = i + ' 人';
+        if (i === 28) opt.selected = true;
+        countSelect.appendChild(opt);
+      }
+    };
+
+    function checkAndGenerate() {
+      const className = document.getElementById('classSelect').value;
+      const totalCount = parseInt(document.getElementById('countSelect').value, 10);
+      if (!className || !totalCount) {
+        document.getElementById('studentGrid').innerHTML = '';
+        document.getElementById('submitBtn').style.display = 'none';
+        document.getElementById('info').textContent = '請先選擇班級與班級人數';
+        return;
+      }
+      seatsData = Array.from({ length: totalCount }, (_, i) => ({ seatNo: i + 1, absent: false }));
+      renderGrid();
+      document.getElementById('info').textContent = `共 ${totalCount} 人，點擊座號切換「缺席」`;
+      document.getElementById('submitBtn').style.display = 'block';
+    }
+
+    function renderGrid() {
+      const grid = document.getElementById('studentGrid');
+      grid.innerHTML = '';
+      seatsData.forEach((s, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `p-2 rounded-lg font-bold text-center border-2 transition ${s.absent ? 'bg-red-500 text-white border-red-600' : 'bg-green-50 text-green-800 border-green-500'}`;
+        btn.innerHTML = `${s.seatNo}號<br><span class="text-xs font-normal">${s.absent ? '缺席' : '出席'}</span>`;
+        btn.onclick = () => { seatsData[idx].absent = !seatsData[idx].absent; renderGrid(); };
+        grid.appendChild(btn);
+      });
+    }
+
+    async function submit() {
+      const className = document.getElementById('classSelect').value;
+      const absentList = seatsData.filter(s => s.absent).map(s => `${s.seatNo}號`);
+      const todayStr = new Date().toISOString().split('T')[0];
+      const docId = `${todayStr}_${className}`;
+
+      if (confirm(`確認提交 ${className} 點名紀錄？\n缺席座號：${absentList.length > 0 ? absentList.join(', ') : '無'}`)) {
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true; btn.innerText = '傳送中...';
+        try {
+          await db.collection('attendance').doc(docId).set({
+            date: todayStr,
+            className: className,
+            totalCount: seatsData.length,
+            presentCount: seatsData.length - absentList.length,
+            absentCount: absentList.length,
+            absentList: absentList,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          alert('提交成功！同日重新送出將自動覆蓋舊紀錄。');
+          location.reload();
+        } catch (error) {
+          alert('提交失敗：' + error.message);
+          btn.disabled = false; btn.innerText = '提交今日點名紀錄';
+        }
+      }
+    }
+  </script>
+</body>
+</html>
