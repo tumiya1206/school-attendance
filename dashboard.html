@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>晨間點名行政儀表板</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg-gray-50 p-6">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <div class="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm">
+      <h1 class="text-3xl font-bold text-gray-800">全校晨間點名儀表板</h1>
+      <span id="currentDate" class="text-xl font-semibold text-blue-600"></span>
+    </div>
+
+    <!-- 頂部數據卡片 -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-blue-500">
+        <div class="text-sm text-gray-500 font-bold">今日已回報班級</div>
+        <div id="reportedCount" class="text-3xl font-bold text-gray-800 mt-2">0 / 9 班</div>
+      </div>
+      <div class="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-green-500">
+        <div class="text-sm text-gray-500 font-bold">今日全校出席率</div>
+        <div id="attendanceRate" class="text-3xl font-bold text-gray-800 mt-2">0%</div>
+      </div>
+      <div class="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-red-500">
+        <div class="text-sm text-gray-500 font-bold">今日全校總缺席人數</div>
+        <div id="totalAbsentCount" class="text-3xl font-bold text-red-600 mt-2">0 人</div>
+      </div>
+    </div>
+
+    <!-- 今日總覽表格 -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm">
+      <h2 class="text-xl font-bold text-gray-800 mb-4">今日各班狀態</h2>
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="border-b bg-gray-50 text-gray-600 text-sm">
+            <th class="p-3">班級</th><th class="p-3">狀態</th><th class="p-3">出席 / 應到</th><th class="p-3">缺席座號</th>
+          </tr>
+        </thead>
+        <tbody id="todayTableBody" class="divide-y text-gray-700"></tbody>
+      </table>
+    </div>
+
+    <!-- 分析圖表區 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="bg-white p-6 rounded-2xl shadow-sm">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">近 7 日每日缺席人數趨勢</h2>
+        <canvas id="dailyChart" class="w-full h-64"></canvas>
+      </div>
+      <div class="bg-white p-6 rounded-2xl shadow-sm">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">本月各班累計缺席次數</h2>
+        <canvas id="classChart" class="w-full h-64"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBqdSFkDkjka6hewD9hEfY39KIErVonz1I",
+      authDomain: "school-attendance-5c91c.firebaseapp.com",
+      projectId: "school-attendance-5c91c",
+      storageBucket: "school-attendance-5c91c.firebasestorage.app",
+      messagingSenderId: "3254054266",
+      appId: "1:3254054266:web:246cd39b057a916ebafac3",
+      measurementId: "G-PRV1QQM6ML"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const classList = ['一年一班','二年一班','三年一班','四年一班','四年二班','五年一班','五年二班','六年一班','六年二班'];
+    const todayStr = new Date().toISOString().split('T')[0];
+    document.getElementById('currentDate').textContent = `日期：${todayStr}`;
+
+    // 即時監聽今日紀錄
+    db.collection('attendance').where('date', '==', todayStr).onSnapshot(snapshot => {
+      const records = {};
+      snapshot.forEach(doc => { records[doc.data().className] = doc.data(); });
+      renderTodayTable(records);
+    });
+
+    function renderTodayTable(records) {
+      const tbody = document.getElementById('todayTableBody');
+      tbody.innerHTML = '';
+      let reportedNum = 0, totalPresent = 0, totalStudents = 0, totalAbsent = 0;
+
+      classList.forEach(c => {
+        const rec = records[c];
+        const isReported = !!rec;
+        if (isReported) {
+          reportedNum++;
+          totalPresent += rec.presentCount;
+          totalStudents += rec.totalCount;
+          totalAbsent += rec.absentCount;
+        }
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="p-3 font-semibold">${c}</td>
+          <td class="p-3">${isReported ? '<span class="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">✅ 已回報</span>' : '<span class="bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs font-bold">❌ 未回報</span>'}</td>
+          <td class="p-3">${isReported ? `${rec.presentCount} / ${rec.totalCount} 人` : '-'}</td>
+          <td class="p-3 text-red-600 font-bold">${isReported ? (rec.absentList.length > 0 ? rec.absentList.join(', ') : '無') : '-'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('reportedCount').textContent = `${reportedNum} / ${classList.length} 班`;
+      document.getElementById('totalAbsentCount').textContent = `${totalAbsent} 人`;
+      document.getElementById('attendanceRate').textContent = totalStudents > 0 ? `${((totalPresent / totalStudents) * 100).toFixed(1)}%` : '0%';
+    }
+
+    // 繪製統計圖表
+    async function loadCharts() {
+      const snapshot = await db.collection('attendance').get();
+      const allData = snapshot.docs.map(doc => doc.data());
+
+      const last7Days = Array.from({length: 7}, (_, i) => {
+        const d = new Date(); d.setDate(d.getDate() - (6 - i));
+        return d.toISOString().split('T')[0];
+      });
+
+      const dailyMap = {}; last7Days.forEach(day => dailyMap[day] = 0);
+      allData.forEach(d => { if (dailyMap[d.date] !== undefined) dailyMap[d.date] += d.absentCount; });
+
+      new Chart(document.getElementById('dailyChart'), {
+        type: 'line',
+        data: { labels: last7Days, datasets: [{ label: '缺席總人數', data: Object.values(dailyMap), borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.3 }] }
+      });
+
+      const currentMonth = todayStr.substring(0, 7);
+      const classMap = {}; classList.forEach(c => classMap[c] = 0);
+      allData.filter(d => d.date.startsWith(currentMonth)).forEach(d => { if (classMap[d.className] !== undefined) classMap[d.className] += d.absentCount; });
+
+      new Chart(document.getElementById('classChart'), {
+        type: 'bar',
+        data: { labels: classList, datasets: [{ label: '本月累計缺席次數', data: Object.values(classMap), backgroundColor: '#ef4444' }] }
+      });
+    }
+    loadCharts();
+  </script>
+</body>
+</html>
