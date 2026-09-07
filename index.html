@@ -9,8 +9,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen p-4">
-  <div class="max-w-md mx-auto bg-white rounded-2xl shadow-md p-6">
-    <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">班級晨間點名</h2>
+  <div class="max-w-md mx-auto bg-white rounded-2xl shadow-md p-6 relative">
+    <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">班級點名系統</h2>
     
     <div class="space-y-4 mb-6">
       <div>
@@ -36,11 +36,53 @@
     </div>
 
     <div id="info" class="text-center text-sm text-gray-500 mb-4">請先選擇班級與班級人數</div>
-    <div id="studentGrid" class="grid grid-cols-5 gap-2 mb-6"></div>
+    <div id="studentGrid" class="grid grid-cols-4 gap-2 mb-6"></div>
 
     <button id="submitBtn" onclick="submit()" style="display:none;" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition">
       提交今日點名紀錄
     </button>
+  </div>
+
+  <!-- 缺席細節設定彈窗 Modal -->
+  <div id="modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 id="modalTitle" class="text-lg font-bold text-gray-800">設定缺席明細</h3>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">假別</label>
+        <select id="leaveTypeSelect" class="w-full p-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="事假">事假</option>
+          <option value="病假">病假</option>
+          <option value="公假">公假</option>
+          <option value="喪假">喪假</option>
+          <option value="曠課">曠課</option>
+        </select>
+      </div>
+
+      <div>
+        <div class="flex justify-between items-center mb-1">
+          <label class="block text-sm font-semibold text-gray-700">請假節次</label>
+          <button type="button" onclick="toggleAllPeriods()" class="text-xs text-blue-600 font-bold">全選 / 全不選</button>
+        </div>
+        <div class="grid grid-cols-4 gap-2 text-sm">
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="1"> <span>第1節</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="2"> <span>第2節</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="3"> <span>第3節</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="4"> <span>第4節</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="5"> <span>第5節</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="6"> <span>第6節</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="7"> <span>第7節</span></label>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button onclick="clearStudentAbsent()" class="w-1/3 py-2.5 bg-gray-200 text-gray-700 font-bold rounded-xl">改為出席</button>
+        <button onclick="saveStudentAbsent()" class="w-2/3 py-2.5 bg-blue-600 text-white font-bold rounded-xl shadow">儲存設定</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -57,6 +99,7 @@
     const db = firebase.firestore();
 
     let seatsData = [];
+    let currentEditIdx = null;
 
     window.onload = function() {
       const countSelect = document.getElementById('countSelect');
@@ -77,9 +120,14 @@
         document.getElementById('info').textContent = '請先選擇班級與班級人數';
         return;
       }
-      seatsData = Array.from({ length: totalCount }, (_, i) => ({ seatNo: i + 1, absent: false }));
+      seatsData = Array.from({ length: totalCount }, (_, i) => ({
+        seatNo: i + 1,
+        absent: false,
+        type: '事假',
+        periods: [1,2,3,4,5,6,7]
+      }));
       renderGrid();
-      document.getElementById('info').textContent = `共 ${totalCount} 人，點擊座號切換「缺席」`;
+      document.getElementById('info').textContent = `共 ${totalCount} 人，點擊座號設定缺席節次與假別`;
       document.getElementById('submitBtn').style.display = 'block';
     }
 
@@ -89,21 +137,75 @@
       seatsData.forEach((s, idx) => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = `p-2 rounded-lg font-bold text-center border-2 transition ${s.absent ? 'bg-red-500 text-white border-red-600' : 'bg-green-50 text-green-800 border-green-500'}`;
-        btn.innerHTML = `${s.seatNo}號<br><span class="text-xs font-normal">${s.absent ? '缺席' : '出席'}</span>`;
-        btn.onclick = () => { seatsData[idx].absent = !seatsData[idx].absent; renderGrid(); };
+        btn.className = `p-2 rounded-xl font-bold text-center border-2 transition ${s.absent ? 'bg-red-50 text-red-700 border-red-500' : 'bg-green-50 text-green-800 border-green-500'}`;
+        
+        let subText = s.absent ? `${s.type}(${s.periods.length}節)` : '出席';
+        btn.innerHTML = `<div class="text-base">${s.seatNo}號</div><div class="text-xs font-semibold ${s.absent ? 'text-red-600' : 'text-green-600'}">${subText}</div>`;
+        btn.onclick = () => openModal(idx);
         grid.appendChild(btn);
       });
     }
 
+    function openModal(idx) {
+      currentEditIdx = idx;
+      const s = seatsData[idx];
+      document.getElementById('modalTitle').textContent = `設定 ${s.seatNo} 號缺席明細`;
+      document.getElementById('leaveTypeSelect').value = s.type || '事假';
+      
+      const cbs = document.querySelectorAll('.period-cb');
+      cbs.forEach(cb => {
+        cb.checked = s.absent ? s.periods.includes(parseInt(cb.value, 10)) : true;
+      });
+      
+      const modal = document.getElementById('modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function toggleAllPeriods() {
+      const cbs = document.querySelectorAll('.period-cb');
+      const allChecked = Array.from(cbs).every(cb => cb.checked);
+      cbs.forEach(cb => cb.checked = !allChecked);
+    }
+
+    function saveStudentAbsent() {
+      if (currentEditIdx === null) return;
+      const selectedPeriods = Array.from(document.querySelectorAll('.period-cb:checked')).map(cb => parseInt(cb.value, 10));
+      if (selectedPeriods.length === 0) {
+        alert('請至少選擇一節課，或點擊「改為出席」！');
+        return;
+      }
+      seatsData[currentEditIdx].absent = true;
+      seatsData[currentEditIdx].type = document.getElementById('leaveTypeSelect').value;
+      seatsData[currentEditIdx].periods = selectedPeriods.sort((a,b) => a - b);
+      closeModal();
+      renderGrid();
+    }
+
+    function clearStudentAbsent() {
+      if (currentEditIdx === null) return;
+      seatsData[currentEditIdx].absent = false;
+      closeModal();
+      renderGrid();
+    }
+
     async function submit() {
       const className = document.getElementById('classSelect').value;
-      const absentList = seatsData.filter(s => s.absent).map(s => `${s.seatNo}號`);
+      const absentList = seatsData.filter(s => s.absent).map(s => {
+        const periodStr = s.periods.length === 7 ? '全天' : `第${s.periods.join(',')}節`;
+        return `${s.seatNo}號[${s.type}-${periodStr}]`;
+      });
       const todayStr = new Date().toISOString().split('T')[0];
       const monthStr = todayStr.substring(0, 7);
       const docId = `${todayStr}_${className}`;
 
-      if (confirm(`確認提交 ${className} 點名紀錄？\n缺席座號：${absentList.length > 0 ? absentList.join(', ') : '無'}`)) {
+      if (confirm(`確認提交 ${className} 點名紀錄？\n缺席名單：\n${absentList.length > 0 ? absentList.join('\n') : '無（全員到齊）'}`)) {
         const btn = document.getElementById('submitBtn');
         btn.disabled = true; btn.innerText = '傳送中...';
         try {
@@ -115,6 +217,7 @@
             presentCount: seatsData.length - absentList.length,
             absentCount: absentList.length,
             absentList: absentList,
+            absentDetails: seatsData.filter(s => s.absent),
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           });
           alert('提交成功！已歸檔至今日紀錄。');
