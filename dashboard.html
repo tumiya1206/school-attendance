@@ -125,19 +125,13 @@
     let rawData = [];
 
     window.onload = function() {
+      // 預設選擇當月 (例如 2026-09)
       const now = new Date();
       const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       document.getElementById('monthFilter').value = currentMonth;
       
       fetchData();
     };
-
-    // 格式化節次防呆（去除重複節次並排序）
-    function formatPeriods(periods) {
-      if (!periods || !Array.isArray(periods) || periods.length === 0) return '全天';
-      const clean = [...new Set(periods)].sort((a, b) => a - b);
-      return clean.length === 7 ? '全天' : `第${clean.join(',')}節`;
-    }
 
     // 抓取指定月份的所有點名紀錄
     async function fetchData() {
@@ -159,7 +153,7 @@
         filterAndRender();
       } catch (err) {
         console.error("抓取失敗：", err);
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center p-8 text-red-500">資料讀取失敗，請確認網路連線。</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center p-8 text-red-500">資料讀取失敗，請確認網路連線或 Index 設定。</td></tr>`;
       }
     }
 
@@ -189,27 +183,20 @@
 
       tbody.innerHTML = data.map(item => {
         const isPerfect = item.absentCount === 0;
-        const absentBadge = isPerfect 
+        const absentText = isPerfect 
           ? `<span class="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">全員到齊</span>`
           : `<span class="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full">${item.absentCount} 人缺席</span>`;
 
-        // 畫面即時整理缺席明細（自動去除重複節次）
-        let detailsText = '<span class="text-slate-400">-</span>';
-        if (item.absentDetails && item.absentDetails.length > 0) {
-          detailsText = item.absentDetails.map(d => {
-            const pStr = formatPeriods(d.periods);
-            return `${d.seatNo}號[${d.type || '事假'}-${pStr}]`;
-          }).join('、 ');
-        } else if (item.absentList && item.absentList.length > 0) {
-          detailsText = item.absentList.join('、 ');
-        }
+        const detailsText = item.absentList && item.absentList.length > 0 
+          ? item.absentList.join('、 ') 
+          : '<span class="text-slate-400">-</span>';
 
         return `
           <tr class="hover:bg-slate-50 border-b border-slate-100">
             <td class="p-3 font-semibold text-slate-800">${item.date}</td>
             <td class="p-3 font-bold text-blue-900">${item.className}</td>
             <td class="p-3 text-slate-600">${item.totalCount}人 / ${item.presentCount}人</td>
-            <td class="p-3">${absentBadge}</td>
+            <td class="p-3">${absentText}</td>
             <td class="p-3 text-slate-700 font-mono text-xs">${detailsText}</td>
             <td class="p-3 text-center">
               <button onclick="deleteDoc('${item.id}')" class="text-xs text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded border border-red-200 hover:bg-red-50">刪除</button>
@@ -219,6 +206,7 @@
       }).join('');
     }
 
+    // 更新頂部數據指標
     function updateStats(data) {
       document.getElementById('statTotalDocs').textContent = `${data.length} 筆`;
       
@@ -229,12 +217,12 @@
       const rate = data.length > 0 ? Math.round((perfectCount / data.length) * 100) : 0;
       document.getElementById('statPerfectRate').textContent = `${rate}%`;
 
+      // 統計最多請假假別
       const typeCounts = {};
       data.forEach(item => {
         if (item.absentDetails) {
           item.absentDetails.forEach(d => {
-            const t = d.type || '事假';
-            typeCounts[t] = (typeCounts[t] || 0) + 1;
+            typeCounts[d.type] = (typeCounts[d.type] || 0) + 1;
           });
         }
       });
@@ -247,6 +235,7 @@
       document.getElementById('statTopType').textContent = topType;
     }
 
+    // 刪除紀錄
     async function deleteDoc(docId) {
       if (confirm(`確定要刪除這筆紀錄 (${docId}) 嗎？此操作無法復原！`)) {
         try {
@@ -259,7 +248,7 @@
       }
     }
 
-    // 匯出 Excel (導出時自動去除重複節次)
+    // 匯出至 Excel (.xlsx)
     function exportToExcel() {
       const month = document.getElementById('monthFilter').value;
       if (rawData.length === 0) {
@@ -267,24 +256,24 @@
         return;
       }
 
+      // 格式化匯出資料
       const exportRows = [];
       rawData.forEach(item => {
         if (item.absentDetails && item.absentDetails.length > 0) {
           item.absentDetails.forEach(d => {
-            const cleanPeriods = d.periods ? [...new Set(d.periods)].sort((a,b)=>a-b) : [1,2,3,4,5,6,7];
-            const periodStr = formatPeriods(cleanPeriods);
-            
+            const periodStr = d.periods.length === 7 ? '全天' : `第${d.periods.join(',')}節`;
             exportRows.push({
               "日期": item.date,
               "班級": item.className,
               "座號": d.seatNo,
-              "假別": d.type || '事假',
-              "請假節數": cleanPeriods.length,
+              "假別": d.type,
+              "請假節數": d.periods.length,
               "請假節次明細": periodStr,
               "提交時間": item.timestamp ? new Date(item.timestamp.seconds * 1000).toLocaleString('zh-TW') : ''
             });
           });
         } else {
+          // 全員到齊紀錄
           exportRows.push({
             "日期": item.date,
             "班級": item.className,
@@ -301,6 +290,7 @@
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "缺席報表");
 
+      // 匯出檔案
       XLSX.writeFile(workbook, `民生國小_點名紀錄報表_${month}.xlsx`);
     }
   </script>
