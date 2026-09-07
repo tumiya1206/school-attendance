@@ -87,16 +87,17 @@
           <label class="block text-sm font-semibold text-gray-700">請假節次</label>
           <button type="button" onclick="toggleAllPeriods()" class="text-xs text-blue-600 font-bold">全選 / 全不選</button>
         </div>
-        <div class="grid grid-cols-4 gap-2 text-sm">
-          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="1"> <span>導師時間</span></label>
+        <!-- 修正：9 個時段選項 (導師時間[0]、1~4節[1~4]、午休[5]、5~7節[6~8]) -->
+        <div class="grid grid-cols-3 gap-2 text-xs">
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="0"> <span>導師時間</span></label>
           <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="1"> <span>第1節</span></label>
           <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="2"> <span>第2節</span></label>
           <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="3"> <span>第3節</span></label>
           <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="4"> <span>第4節</span></label>
-          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="1"> <span>午休</span></label>
-          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="5"> <span>第5節</span></label>
-          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="6"> <span>第6節</span></label>
-          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="7"> <span>第7節</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="5"> <span>午休</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="6"> <span>第5節</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="7"> <span>第6節</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="8"> <span>第7節</span></label>
         </div>
       </div>
 
@@ -123,6 +124,19 @@
     let seatsData = [];
     let currentEditIdx = null;
     let isExpired = false;
+
+    // 時段顯示文字對照表
+    const periodNameMap = {
+      0: '導師時間',
+      1: '第1節',
+      2: '第2節',
+      3: '第3節',
+      4: '第4節',
+      5: '午休',
+      6: '第5節',
+      7: '第6節',
+      8: '第7節'
+    };
 
     window.onload = function() {
       const todayStr = new Date().toISOString().split('T')[0];
@@ -176,11 +190,12 @@
         submitBtn.disabled = false;
       }
 
+      // 預設請假時選擇全部時段 [0~8]
       seatsData = Array.from({ length: totalCount }, (_, i) => ({
         seatNo: i + 1,
         absent: false,
         type: '事假',
-        periods: [1,2,3,4,5,6,7]
+        periods: [0, 1, 2, 3, 4, 5, 6, 7, 8]
       }));
 
       const docId = `${selectedDate}_${className}`;
@@ -215,7 +230,7 @@
         btn.type = 'button';
         btn.className = `p-2 rounded-xl font-bold text-center border-2 transition ${s.absent ? 'bg-red-50 text-red-700 border-red-500' : 'bg-green-50 text-green-800 border-green-500'}`;
         
-        let subText = s.absent ? `${s.type}(${s.periods.length}節)` : '出席';
+        let subText = s.absent ? `${s.type}(${s.periods ? s.periods.length : 0}節)` : '出席';
         btn.innerHTML = `<div class="text-base">${s.seatNo}號</div><div class="text-xs font-semibold ${s.absent ? 'text-red-600' : 'text-green-600'}">${subText}</div>`;
         
         btn.onclick = () => {
@@ -237,7 +252,7 @@
       
       const cbs = document.querySelectorAll('.period-cb');
       cbs.forEach(cb => {
-        cb.checked = s.absent ? s.periods.includes(parseInt(cb.value, 10)) : true;
+        cb.checked = s.absent ? (s.periods && s.periods.includes(parseInt(cb.value, 10))) : true;
       });
       
       const modal = document.getElementById('modal');
@@ -261,7 +276,7 @@
       if (currentEditIdx === null) return;
       const selectedPeriods = Array.from(document.querySelectorAll('.period-cb:checked')).map(cb => parseInt(cb.value, 10));
       if (selectedPeriods.length === 0) {
-        alert('請至少選擇一節課，或點擊「改為出席」！');
+        alert('請至少選擇一個時段，或點擊「改為出席」！');
         return;
       }
       seatsData[currentEditIdx].absent = true;
@@ -288,7 +303,12 @@
       const className = document.getElementById('classSelect').value;
       
       const absentList = seatsData.filter(s => s.absent).map(s => {
-        const periodStr = s.periods.length === 7 ? '全天' : `第${s.periods.join(',')}節`;
+        let periodStr = '';
+        if (s.periods.length === 9) {
+          periodStr = '全天';
+        } else {
+          periodStr = s.periods.map(p => periodNameMap[p]).join(',');
+        }
         return `${s.seatNo}號[${s.type}-${periodStr}]`;
       });
       
