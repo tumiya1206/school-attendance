@@ -11,67 +11,114 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen p-6">
-  <div class="max-w-6xl mx-auto bg-white rounded-2xl shadow-xl p-6">
+  <div class="max-w-6xl mx-auto space-y-6">
     
-    <!-- 標題與圖示 -->
-    <div class="flex items-center justify-between border-b pb-4 mb-6">
+    <!-- 頂部標題與匯出按鈕 -->
+    <div class="bg-white rounded-2xl shadow-xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
       <div class="flex items-center space-x-3">
         <img src="https://www.msps.ptc.edu.tw/uploads/1711081122959z3rux6p2.png" alt="校徽" class="w-12 h-12 object-contain">
-        <h1 class="text-2xl font-bold text-gray-800">屏東市民生國小 - 出缺勤行政管理後台</h1>
+        <div>
+          <h1 class="text-2xl font-bold text-gray-800">屏東市民生國小 - 出缺勤行政管理後台</h1>
+          <p class="text-xs text-gray-500">當日即時監控與歷史缺勤數據統計</p>
+        </div>
       </div>
-      <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-xl shadow flex items-center gap-2">
+      <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white font-bold px-5 py-2.5 rounded-xl shadow flex items-center gap-2">
         📊 匯出月報表 (Excel)
       </button>
     </div>
 
-    <!-- 篩選器條件區 -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
-      <div>
-        <label class="block text-xs font-bold text-gray-600 mb-1">📅 查詢月份</label>
-        <input type="month" id="monthFilter" onchange="loadData()" class="w-full p-2.5 border rounded-lg bg-white text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500">
+    <!-- 📌 當天全校出缺勤總覽區 -->
+    <div class="bg-white rounded-2xl shadow-xl p-6 border-l-4 border-blue-600">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+          📅 當日即時點名概況 <span id="todayDateStr" class="text-sm font-normal text-blue-600"></span>
+        </h2>
+        <button onclick="loadTodayData()" class="text-xs text-blue-600 hover:underline">🔄 重新整理今日</button>
       </div>
-      <div>
-        <label class="block text-xs font-bold text-gray-600 mb-1">🏫 班級篩選</label>
-        <select id="classFilter" onchange="loadData()" class="w-full p-2.5 border rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="ALL">全部班級</option>
-          <option value="一年一班">一年一班</option>
-          <option value="二年一班">二年一班</option>
-          <option value="三年一班">三年一班</option>
-          <option value="四年一班">四年一班</option>
-          <option value="四年二班">四年二班</option>
-          <option value="五年一班">五年一班</option>
-          <option value="五年二班">五年二班</option>
-          <option value="六年一班">六年一班</option>
-          <option value="六年二班">六年二班</option>
-        </select>
+
+      <!-- 統計數據小卡 -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl text-center">
+          <p class="text-xs text-blue-600 font-bold mb-1">應點名班級數</p>
+          <p id="statTotalClasses" class="text-2xl font-black text-blue-800">9</p>
+        </div>
+        <div class="bg-green-50 border border-green-100 p-4 rounded-xl text-center">
+          <p class="text-xs text-green-600 font-bold mb-1">已完成點名</p>
+          <p id="statDoneClasses" class="text-2xl font-black text-green-800">0</p>
+        </div>
+        <div class="bg-yellow-50 border border-yellow-100 p-4 rounded-xl text-center">
+          <p class="text-xs text-yellow-600 font-bold mb-1">未點名班級</p>
+          <p id="statUndoneClasses" class="text-2xl font-black text-yellow-800">9</p>
+        </div>
+        <div class="bg-red-50 border border-red-100 p-4 rounded-xl text-center">
+          <p class="text-xs text-red-600 font-bold mb-1">今日全校缺席人數</p>
+          <p id="statTodayAbsent" class="text-2xl font-black text-red-800">0</p>
+        </div>
       </div>
-      <div class="flex items-end">
-        <button onclick="loadData()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg shadow">
-          🔍 查詢紀錄
-        </button>
+
+      <!-- 今日全校班級狀態標籤區 -->
+      <div>
+        <p class="text-xs font-bold text-gray-500 mb-2">全校各班點名狀態：</p>
+        <div id="todayClassBadges" class="flex flex-wrap gap-2">
+          <span class="text-xs text-gray-400">資料讀取中...</span>
+        </div>
       </div>
     </div>
 
-    <!-- 資料表格 -->
-    <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
-      <table class="w-full text-left text-sm text-gray-600">
-        <thead class="bg-gray-100 text-gray-700 font-bold uppercase text-xs border-b">
-          <tr>
-            <th class="p-3">日期</th>
-            <th class="p-3">班級</th>
-            <th class="p-3 text-center">應到</th>
-            <th class="p-3 text-center">實到</th>
-            <th class="p-3 text-center">缺席</th>
-            <th class="p-3">缺席詳細名單與節次</th>
-          </tr>
-        </thead>
-        <tbody id="attendanceTbody" class="divide-y divide-gray-200">
-          <tr>
-            <td colspan="6" class="p-4 text-center text-gray-400">請選擇月份以載入資料...</td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- 🔍 月份歷史查詢與表格區 -->
+    <div class="bg-white rounded-2xl shadow-xl p-6">
+      <h2 class="text-lg font-bold text-gray-800 mb-4">🔍 歷史出缺勤明細查詢</h2>
+      
+      <!-- 篩選器條件區 -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">📅 查詢月份</label>
+          <input type="month" id="monthFilter" onchange="loadData()" class="w-full p-2.5 border rounded-lg bg-white text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">🏫 班級篩選</label>
+          <select id="classFilter" onchange="loadData()" class="w-full p-2.5 border rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="ALL">全部班級</option>
+            <option value="一年一班">一年一班</option>
+            <option value="二年一班">二年一班</option>
+            <option value="三年一班">三年一班</option>
+            <option value="四年一班">四年一班</option>
+            <option value="四年二班">四年二班</option>
+            <option value="五年一班">五年一班</option>
+            <option value="五年二班">五年二班</option>
+            <option value="六年一班">六年一班</option>
+            <option value="六年二班">六年二班</option>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <button onclick="loadData()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg shadow">
+            🔍 查詢紀錄
+          </button>
+        </div>
+      </div>
+
+      <!-- 資料表格 -->
+      <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+        <table class="w-full text-left text-sm text-gray-600">
+          <thead class="bg-gray-100 text-gray-700 font-bold uppercase text-xs border-b">
+            <tr>
+              <th class="p-3">日期</th>
+              <th class="p-3">班級</th>
+              <th class="p-3 text-center">應到</th>
+              <th class="p-3 text-center">實到</th>
+              <th class="p-3 text-center">缺席</th>
+              <th class="p-3">缺席詳細名單與節次</th>
+            </tr>
+          </thead>
+          <tbody id="attendanceTbody" class="divide-y divide-gray-200">
+            <tr>
+              <td colspan="6" class="p-4 text-center text-gray-400">請選擇月份以載入資料...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
+
   </div>
 
   <script>
@@ -87,7 +134,12 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    let fetchedDocs = [];
+    // 全校所有預設班級清單
+    const allSchoolClasses = [
+      "一年一班", "二年一班", "三年一班", 
+      "四年一班", "四年二班", "五年一班", 
+      "五年二班", "六年一班", "六年二班"
+    ];
 
     // 時段名稱對照表 (0:導師時間, 1~4:第1~4節, 5:午休, 6~8:第5~7節)
     const periodNameMap = {
@@ -102,13 +154,66 @@
       8: "第7節"
     };
 
+    let fetchedDocs = [];
+
     window.onload = function() {
       const today = new Date();
       const monthStr = today.toISOString().substring(0, 7);
       document.getElementById('monthFilter').value = monthStr;
+
+      // 載入當天與月份資料
+      loadTodayData();
       loadData();
     };
 
+    // 1. 載入「當日」全校概況
+    async function loadTodayData() {
+      const todayStr = new Date().toISOString().substring(0, 10);
+      document.getElementById('todayDateStr').innerText = `(${todayStr})`;
+
+      try {
+        const snapshot = await db.collection('attendance').where('date', '==', todayStr).get();
+        
+        let doneClasses = [];
+        let totalTodayAbsent = 0;
+
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          doneClasses.push(data.className);
+          totalTodayAbsent += (data.absentCount || 0);
+        });
+
+        // 計算數據
+        const doneCount = doneClasses.length;
+        const undoneCount = allSchoolClasses.length - doneCount;
+
+        document.getElementById('statDoneClasses').innerText = doneCount;
+        document.getElementById('statUndoneClasses').innerText = undoneCount;
+        document.getElementById('statTodayAbsent').innerText = totalTodayAbsent;
+
+        // 渲染班級狀態標籤
+        const badgeContainer = document.getElementById('todayClassBadges');
+        badgeContainer.innerHTML = '';
+
+        allSchoolClasses.forEach(cls => {
+          const isDone = doneClasses.includes(cls);
+          const span = document.createElement('span');
+          if (isDone) {
+            span.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-green-100 text-green-800 border border-green-200 flex items-center gap-1';
+            span.innerHTML = `✓ ${cls}`;
+          } else {
+            span.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-100 text-gray-400 border border-gray-200 flex items-center gap-1';
+            span.innerHTML = `⏳ ${cls} (未點名)`;
+          }
+          badgeContainer.appendChild(span);
+        });
+
+      } catch (err) {
+        console.error("載入當日概況失敗：", err);
+      }
+    }
+
+    // 2. 載入月份明細表格
     async function loadData() {
       const monthSelected = document.getElementById('monthFilter').value;
       const classSelected = document.getElementById('classFilter').value;
@@ -139,8 +244,8 @@
           fetchedDocs.push({ id: doc.id, ...doc.data() });
         });
 
-        // 依日期與班級排序
-        fetchedDocs.sort((a, b) => a.date.localeCompare(b.date) || a.className.localeCompare(b.className));
+        // 依日期與班級排序 (最新日期在前)
+        fetchedDocs.sort((a, b) => b.date.localeCompare(a.date) || a.className.localeCompare(b.className));
 
         renderTable();
       } catch (err) {
@@ -206,13 +311,12 @@
       fetchedDocs.forEach(doc => {
         if (doc.absentDetails && doc.absentDetails.length > 0) {
           doc.absentDetails.forEach(s => {
-            // 建立 9 個時段欄位預設值
             const periodCols = Array(9).fill("");
             
             if (s.periods) {
               s.periods.forEach(pIdx => {
                 if (pIdx >= 0 && pIdx <= 8) {
-                  periodCols[pIdx] = "V"; // 勾選請假時段
+                  periodCols[pIdx] = "V";
                 }
               });
             }
@@ -222,7 +326,7 @@
               doc.className,
               `${s.seatNo}號`,
               s.type,
-              ...periodCols // 依序展開為 9 個欄位
+              ...periodCols
             ];
             exportData.push(row);
           });
