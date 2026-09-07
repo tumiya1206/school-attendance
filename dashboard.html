@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>民生國小 - 出缺勤行政管理後台</title>
+  <title>屏東市民生國小出缺勤行政管理後台</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -153,6 +153,16 @@
 
     let fetchedDocs = [];
 
+    // 🛠️ 班級名稱正規化工具（防止數字/國字/空白不合導致卡片對不上）
+    function normalizeClassName(name) {
+      if (!name) return "";
+      let str = name.trim()
+        .replace(/1/g, "一").replace(/2/g, "二")
+        .replace(/3/g, "三").replace(/4/g, "四")
+        .replace(/5/g, "五").replace(/6/g, "六");
+      return str;
+    }
+
     window.onload = function() {
       const today = new Date();
       const monthStr = today.toISOString().substring(0, 7);
@@ -162,7 +172,7 @@
       loadData();
     };
 
-    // 1. 載入當日全校卡片與名單
+    // 1. 載入當日全校卡片與名單 (已加入廣義比對與除錯)
     async function loadTodayData() {
       const todayStr = new Date().toISOString().substring(0, 10);
       document.getElementById('todayDateStr').innerText = `(${todayStr})`;
@@ -176,7 +186,10 @@
 
         snapshot.forEach(doc => {
           const data = doc.data();
-          todayMap[data.className] = data;
+          console.log("今日撈出的資料：", doc.id, data);
+          
+          const normalizedClass = normalizeClassName(data.className);
+          todayMap[normalizedClass] = data;
           doneCount++;
           totalTodayAbsent += (data.absentCount || 0);
         });
@@ -189,7 +202,8 @@
         cardsContainer.innerHTML = '';
 
         allSchoolClasses.forEach(cls => {
-          const cardData = todayMap[cls];
+          const normalizedKey = normalizeClassName(cls);
+          const cardData = todayMap[normalizedKey];
           const card = document.createElement('div');
 
           if (!cardData) {
@@ -248,7 +262,7 @@
       }
     }
 
-    // 2. 載入歷史月份明細
+    // 2. 載入歷史月份明細 (未動，維持完整性)
     async function loadData() {
       const monthSelected = document.getElementById('monthFilter').value;
       const classSelected = document.getElementById('classFilter').value;
@@ -325,7 +339,7 @@
       });
     }
 
-    // 匯出 Excel
+    // 匯出 Excel (未動，維持完整性)
     function exportToExcel() {
       if (fetchedDocs.length === 0) {
         alert('目前沒有資料可供匯出！');
