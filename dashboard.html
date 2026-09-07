@@ -182,11 +182,11 @@
       });
     }
 
-    // 格式化節次文字（用於頁面表格即時顯示，並自動去除重複）
+    // 格式化節次文字
     function formatPeriodsText(periods) {
       if (!periods || periods.length === 0) return '';
       const clean = [...new Set(periods)].sort((a, b) => a - b);
-      return clean.length === 7 ? '全天' : `第${clean.join(',')}節`;
+      return clean.length >= 7 ? '全天' : `第${clean.join(',')}節`;
     }
 
     function renderTableAndCards(records) {
@@ -204,8 +204,7 @@
           totalAbsent += rec.absentCount;
         }
 
-        // 缺席明細顯示邏輯（去除重複節次）
-        let absentDetailsText = '成員到齊';
+        let absentDetailsText = '全員到齊';
         if (isReported && rec.absentCount > 0) {
           if (rec.absentDetails && rec.absentDetails.length > 0) {
             absentDetailsText = rec.absentDetails.map(d => {
@@ -233,7 +232,7 @@
       document.getElementById('attendanceRate').textContent = totalStudents > 0 ? `${((totalPresent / totalStudents) * 100).toFixed(1)}%` : '0%';
     }
 
-    // 🎯 匯出完全符合「教育部學籍系統出缺席匯入範本」格式的 Excel 檔（修正錯位與去重）
+    // 🎯 匯出完全符合「教育部學籍系統出缺席匯入範本」格式的 Excel 檔
     async function exportOfficialExcel() {
       const selectedMonth = document.getElementById('monthPicker').value;
       if (!selectedMonth) {
@@ -278,21 +277,35 @@
           r.absentDetails.forEach(s => {
             const leaveCode = leaveTypeCodeMap[s.type] || 1;
             
-            // 建立 10 個欄位：
+            // 建立 10 個節次對應欄位：
             // [0]導師時間, [1]第1節, [2]第2節, [3]第3節, [4]第4節, [5]午休, [6]第5節, [7]第6節, [8]第7節, [9]第8節
             let periodCells = Array(10).fill("");
             
             if (s.periods && s.periods.length > 0) {
-              // 去除重複節次並排序
               const cleanPeriods = [...new Set(s.periods)].sort((a, b) => a - b);
               
               cleanPeriods.forEach(p => {
-                if (p >= 1 && p <= 4) {
-                  // 第 1~4 節對應索引 1~4
-                  periodCells[p] = leaveCode;
-                } else if (p >= 5 && p <= 7) {
-                  // 第 5~7 節因為中間卡了「午休(索引 5)」，所以索引需 +1 (第5節->6, 第6節->7, 第7節->8)
-                  periodCells[p + 1] = leaveCode;
+                const pNum = parseInt(p, 10);
+                
+                // 1. 如果傳入 0 或字串包含 "導師"，對應 [0] 導師時間
+                if (pNum === 0 || p === '0' || p === '導師時間') {
+                  periodCells[0] = leaveCode;
+                }
+                // 2. 如果是 1~4 節，對應 [1]~[4]
+                else if (pNum >= 1 && pNum <= 4) {
+                  periodCells[pNum] = leaveCode;
+                } 
+                // 3. 如果是 5 或字串包含 "午休"，對應 [5] 午休
+                else if (pNum === 5 && (p === '午休' || cleanPeriods.length > 7)) {
+                  periodCells[5] = leaveCode;
+                }
+                // 4. 如果是 5~7 節（代表下午第5~7節課），對應到 [6]~[8]
+                else if (pNum >= 5 && pNum <= 7) {
+                  periodCells[pNum + 1] = leaveCode;
+                }
+                // 5. 如果是 第8節，對應 [9]
+                else if (pNum === 8) {
+                  periodCells[9] = leaveCode;
                 }
               });
             }
