@@ -17,8 +17,8 @@
     <!-- 頁頭與控制區 -->
     <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-6 rounded-2xl shadow-sm gap-4">
       <div class="flex items-center gap-4">
-        <!-- 校徽圖示 (請依需求更換圖片路徑 logo.png) -->
-        <img src="logo.png" alt="校徽" class="w-14 h-14 object-contain" onerror="this.style.display='none'">
+        <!-- 校徽圖示 -->
+        <img src="https://www.msps.ptc.edu.tw/uploads/1711081122959z3rux6p2.png" alt="民生國小校徽" class="w-14 h-14 object-contain">
         <div>
           <h1 class="text-3xl font-bold text-gray-800">全校晨間點名儀表板</h1>
           <p class="text-sm text-gray-500 mt-1">即時檢視、歷史查詢與學籍系統對接匯出</p>
@@ -137,7 +137,6 @@
     const chineseToNumMap = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 };
 
     function parseClassInfo(className) {
-      // 例: "四年二班" -> 年級: 4, 班級: 2
       const yearChar = className.charAt(0);
       const classChar = className.charAt(2);
       const grade = chineseToNumMap[yearChar] || '';
@@ -183,6 +182,13 @@
       });
     }
 
+    // 格式化節次文字（用於頁面表格即時顯示，並自動去除重複）
+    function formatPeriodsText(periods) {
+      if (!periods || periods.length === 0) return '';
+      const clean = [...new Set(periods)].sort((a, b) => a - b);
+      return clean.length === 7 ? '全天' : `第${clean.join(',')}節`;
+    }
+
     function renderTableAndCards(records) {
       const tbody = document.getElementById('todayTableBody');
       tbody.innerHTML = '';
@@ -197,12 +203,27 @@
           totalStudents += rec.totalCount;
           totalAbsent += rec.absentCount;
         }
+
+        // 缺席明細顯示邏輯（去除重複節次）
+        let absentDetailsText = '成員到齊';
+        if (isReported && rec.absentCount > 0) {
+          if (rec.absentDetails && rec.absentDetails.length > 0) {
+            absentDetailsText = rec.absentDetails.map(d => {
+              const pStr = formatPeriodsText(d.periods);
+              return `${d.seatNo}號[${d.type || '事假'}${pStr ? '-' + pStr : ''}]`;
+            }).join('； ');
+          } else if (rec.absentList && rec.absentList.length > 0) {
+            absentDetailsText = rec.absentList.join('； ');
+          }
+          absentDetailsText += ` (${rec.absentCount}人)`;
+        }
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td class="p-3 font-semibold">${c}</td>
           <td class="p-3">${isReported ? '<span class="bg-green-100 text-green-700 px-2.5 py-1 rounded-full text-xs font-bold">✅ 已回報</span>' : '<span class="bg-gray-100 text-gray-500 px-2.5 py-1 rounded-full text-xs font-bold">❌ 未回報</span>'}</td>
           <td class="p-3">${isReported ? `${rec.presentCount} / ${rec.totalCount} 人` : '-'}</td>
-          <td class="p-3 text-red-600 font-bold">${isReported ? (rec.absentList && rec.absentList.length > 0 ? `${rec.absentList.join('； ')} (${rec.absentCount}人)` : '全員到齊') : '-'}</td>
+          <td class="p-3 text-red-600 font-bold">${isReported ? absentDetailsText : '-'}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -212,7 +233,7 @@
       document.getElementById('attendanceRate').textContent = totalStudents > 0 ? `${((totalPresent / totalStudents) * 100).toFixed(1)}%` : '0%';
     }
 
-    // 🎯 匯出完全符合「教育部學籍系統出缺席匯入範本」格式的 Excel 檔
+    // 🎯 匯出完全符合「教育部學籍系統出缺席匯入範本」格式的 Excel 檔（修正錯位與去重）
     async function exportOfficialExcel() {
       const selectedMonth = document.getElementById('monthPicker').value;
       if (!selectedMonth) {
@@ -236,13 +257,12 @@
         ],
         // 第 2 列：節次標題
         ["", "", "", "", "", "", "導師時間", "第1節", "第2節", "第3節", "第4節", "午休", "第5節", "第6節", "第7節", "第8節", ""],
-        // 第 3 列：官方範例列 (保留不刪除以符合檢驗)
+        // 第 3 列：官方範例列
         ["8", "03", "10", "1120030", "王範例", "2024-11-26", 1, 1, 1, 1, 1, "", "", "", "", "", "範例"],
-        // 第 4 列：範例說明文字
+        // 第 4 列：說明文字
         ["*以上為範例，請勿刪除，請從第5列開始填", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
       ];
 
-      // 排序資料：先依日期，再依班級階層 (一年一班 -> 六年二班)
       const getClassOrder = (name) => classList.indexOf(name) !== -1 ? classList.indexOf(name) : 999;
       let records = snapshot.docs.map(doc => doc.data());
       records.sort((a, b) => {
@@ -250,21 +270,29 @@
         return getClassOrder(a.className) - getClassOrder(b.className);
       });
 
-      // 填充第 5 列開始的缺席紀錄數據
+      // 填充缺席紀錄數據
       records.forEach(r => {
         if (r.absentDetails && r.absentDetails.length > 0) {
           const classInfo = parseClassInfo(r.className);
           
           r.absentDetails.forEach(s => {
-            const leaveCode = leaveTypeCodeMap[s.type] || 1; // 預設 1 事假
-            // 節次欄位索引：導師時間(col 6), 第1節(col 7), ..., 第7節(col 14)
+            const leaveCode = leaveTypeCodeMap[s.type] || 1;
+            
+            // 建立 10 個欄位：
+            // [0]導師時間, [1]第1節, [2]第2節, [3]第3節, [4]第4節, [5]午休, [6]第5節, [7]第6節, [8]第7節, [9]第8節
             let periodCells = Array(10).fill("");
             
-            // 將勾選的第 1~7 節次填充對應的假別代碼
             if (s.periods && s.periods.length > 0) {
-              s.periods.forEach(p => {
-                if (p >= 1 && p <= 7) {
-                  periodCells[p] = leaveCode; // 第1節對應 index 1，依此類推
+              // 去除重複節次並排序
+              const cleanPeriods = [...new Set(s.periods)].sort((a, b) => a - b);
+              
+              cleanPeriods.forEach(p => {
+                if (p >= 1 && p <= 4) {
+                  // 第 1~4 節對應索引 1~4
+                  periodCells[p] = leaveCode;
+                } else if (p >= 5 && p <= 7) {
+                  // 第 5~7 節因為中間卡了「午休(索引 5)」，所以索引需 +1 (第5節->6, 第6節->7, 第7節->8)
+                  periodCells[p + 1] = leaveCode;
                 }
               });
             }
@@ -273,36 +301,32 @@
               classInfo.grade,     // 年級
               classInfo.classNo,   // 班級
               s.seatNo,            // 座號
-              "",                  // 學號 (留空待學籍系統對應)
-              "",                  // 姓名 (留空待學籍系統對應)
-              r.date,              // 日期 YYYY-MM-DD
-              ...periodCells,      // 導師時間, 第1~8節, 午休
+              "",                  // 學號
+              "",                  // 姓名
+              r.date,              // 日期
+              ...periodCells,      // 10 個節次欄位
               ""                   // 註記
             ]);
           });
         }
       });
 
-      // 使用 SheetJS 建立 Excel 工作簿
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-      // 工作表合併儲存格設定（符合範本第 1~2 列的表頭樣式）
       ws['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, // 年級
-        { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } }, // 班級
-        { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } }, // 座號
-        { s: { r: 0, c: 3 }, e: { r: 1, c: 3 } }, // 學號
-        { s: { r: 0, c: 4 }, e: { r: 1, c: 4 } }, // 姓名
-        { s: { r: 0, c: 5 }, e: { r: 1, c: 5 } }, // 日期
-        { s: { r: 0, c: 6 }, e: { r: 0, c: 15 } },// 缺席節次大標題
-        { s: { r: 0, c: 16 }, e: { r: 1, c: 16 } } // 註記
+        { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } },
+        { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },
+        { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } },
+        { s: { r: 0, c: 3 }, e: { r: 1, c: 3 } },
+        { s: { r: 0, c: 4 }, e: { r: 1, c: 4 } },
+        { s: { r: 0, c: 5 }, e: { r: 1, c: 5 } },
+        { s: { r: 0, c: 6 }, e: { r: 0, c: 15 } },
+        { s: { r: 0, c: 16 }, e: { r: 1, c: 16 } }
       ];
 
-      // 加入「出缺席匯入」工作表
       XLSX.utils.book_append_sheet(wb, ws, "出缺席匯入");
 
-      // 加入「缺曠課種類代碼對照表」工作表
       const codeData = [
         ["代碼", "缺曠課種類"],
         [1, "事假"],
@@ -317,7 +341,6 @@
       const wsCode = XLSX.utils.aoa_to_sheet(codeData);
       XLSX.utils.book_append_sheet(wb, wsCode, "缺曠課種類代碼對照表");
 
-      // 下載 .xlsx 檔
       XLSX.writeFile(wb, `${selectedMonth}_學校出缺席匯入檔.xlsx`);
     }
 
