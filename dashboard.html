@@ -19,7 +19,7 @@
         <img src="https://www.msps.ptc.edu.tw/uploads/1711081122959z3rux6p2.png" alt="校徽" class="w-12 h-12 object-contain">
         <div>
           <h1 class="text-2xl font-bold text-gray-800">屏東市民生國小 - 出缺勤行政管理後台</h1>
-          <p class="text-xs text-gray-500">當日即時監控與歷史缺勤數據統計</p>
+          <p class="text-xs text-gray-500">當日即時缺勤名單與歷史數據統計</p>
         </div>
       </div>
       <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white font-bold px-5 py-2.5 rounded-xl shadow flex items-center gap-2">
@@ -27,41 +27,40 @@
       </button>
     </div>
 
-    <!-- 📌 當天全校出缺勤總覽區 -->
+    <!-- 📌 當天全校各班出缺勤即時卡片區 -->
     <div class="bg-white rounded-2xl shadow-xl p-6 border-l-4 border-blue-600">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
-          📅 當日即時點名概況 <span id="todayDateStr" class="text-sm font-normal text-blue-600"></span>
+          📅 今日各班缺勤即時概況 <span id="todayDateStr" class="text-sm font-normal text-blue-600"></span>
         </h2>
-        <button onclick="loadTodayData()" class="text-xs text-blue-600 hover:underline">🔄 重新整理今日</button>
+        <button onclick="loadTodayData()" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 font-semibold px-3 py-1.5 rounded-lg border border-blue-200">
+          🔄 重新整理今日
+        </button>
       </div>
 
       <!-- 統計數據小卡 -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl text-center">
-          <p class="text-xs text-blue-600 font-bold mb-1">應點名班級數</p>
+        <div class="bg-blue-50 border border-blue-100 p-3.5 rounded-xl text-center">
+          <p class="text-xs text-blue-600 font-bold mb-1">應點名班級</p>
           <p id="statTotalClasses" class="text-2xl font-black text-blue-800">9</p>
         </div>
-        <div class="bg-green-50 border border-green-100 p-4 rounded-xl text-center">
-          <p class="text-xs text-green-600 font-bold mb-1">已完成點名</p>
+        <div class="bg-green-50 border border-green-100 p-3.5 rounded-xl text-center">
+          <p class="text-xs text-green-600 font-bold mb-1">已點名班級</p>
           <p id="statDoneClasses" class="text-2xl font-black text-green-800">0</p>
         </div>
-        <div class="bg-yellow-50 border border-yellow-100 p-4 rounded-xl text-center">
+        <div class="bg-yellow-50 border border-yellow-100 p-3.5 rounded-xl text-center">
           <p class="text-xs text-yellow-600 font-bold mb-1">未點名班級</p>
           <p id="statUndoneClasses" class="text-2xl font-black text-yellow-800">9</p>
         </div>
-        <div class="bg-red-50 border border-red-100 p-4 rounded-xl text-center">
+        <div class="bg-red-50 border border-red-100 p-3.5 rounded-xl text-center">
           <p class="text-xs text-red-600 font-bold mb-1">今日全校缺席人數</p>
           <p id="statTodayAbsent" class="text-2xl font-black text-red-800">0</p>
         </div>
       </div>
 
-      <!-- 今日全校班級狀態標籤區 -->
-      <div>
-        <p class="text-xs font-bold text-gray-500 mb-2">全校各班點名狀態：</p>
-        <div id="todayClassBadges" class="flex flex-wrap gap-2">
-          <span class="text-xs text-gray-400">資料讀取中...</span>
-        </div>
+      <!-- 各班即時動態卡片區 -->
+      <div id="todayClassCards" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <p class="text-xs text-gray-400 col-span-3 text-center py-4">資料載入中...</p>
       </div>
     </div>
 
@@ -134,14 +133,12 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // 全校所有預設班級清單
     const allSchoolClasses = [
       "一年一班", "二年一班", "三年一班", 
       "四年一班", "四年二班", "五年一班", 
       "五年二班", "六年一班", "六年二班"
     ];
 
-    // 時段名稱對照表 (0:導師時間, 1~4:第1~4節, 5:午休, 6~8:第5~7節)
     const periodNameMap = {
       0: "導師時間",
       1: "第1節",
@@ -161,12 +158,11 @@
       const monthStr = today.toISOString().substring(0, 7);
       document.getElementById('monthFilter').value = monthStr;
 
-      // 載入當天與月份資料
       loadTodayData();
       loadData();
     };
 
-    // 1. 載入「當日」全校概況
+    // 1. 載入當日全校卡片與名單
     async function loadTodayData() {
       const todayStr = new Date().toISOString().substring(0, 10);
       document.getElementById('todayDateStr').innerText = `(${todayStr})`;
@@ -174,38 +170,77 @@
       try {
         const snapshot = await db.collection('attendance').where('date', '==', todayStr).get();
         
-        let doneClasses = [];
+        const todayMap = {};
         let totalTodayAbsent = 0;
+        let doneCount = 0;
 
         snapshot.forEach(doc => {
           const data = doc.data();
-          doneClasses.push(data.className);
+          todayMap[data.className] = data;
+          doneCount++;
           totalTodayAbsent += (data.absentCount || 0);
         });
 
-        // 計算數據
-        const doneCount = doneClasses.length;
-        const undoneCount = allSchoolClasses.length - doneCount;
-
         document.getElementById('statDoneClasses').innerText = doneCount;
-        document.getElementById('statUndoneClasses').innerText = undoneCount;
+        document.getElementById('statUndoneClasses').innerText = allSchoolClasses.length - doneCount;
         document.getElementById('statTodayAbsent').innerText = totalTodayAbsent;
 
-        // 渲染班級狀態標籤
-        const badgeContainer = document.getElementById('todayClassBadges');
-        badgeContainer.innerHTML = '';
+        const cardsContainer = document.getElementById('todayClassCards');
+        cardsContainer.innerHTML = '';
 
         allSchoolClasses.forEach(cls => {
-          const isDone = doneClasses.includes(cls);
-          const span = document.createElement('span');
-          if (isDone) {
-            span.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-green-100 text-green-800 border border-green-200 flex items-center gap-1';
-            span.innerHTML = `✓ ${cls}`;
+          const cardData = todayMap[cls];
+          const card = document.createElement('div');
+
+          if (!cardData) {
+            // 未點名班級
+            card.className = 'border border-gray-200 bg-gray-50 rounded-xl p-4 opacity-75';
+            card.innerHTML = `
+              <div class="flex justify-between items-center border-b border-gray-200 pb-2 mb-2">
+                <span class="font-bold text-gray-700">${cls}</span>
+                <span class="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded font-semibold">⏳ 未點名</span>
+              </div>
+              <p class="text-xs text-gray-400">導師尚未傳送今日點名資料</p>
+            `;
+          } else if (cardData.absentCount === 0) {
+            // 已點名：全勤
+            card.className = 'border border-green-200 bg-green-50/50 rounded-xl p-4';
+            card.innerHTML = `
+              <div class="flex justify-between items-center border-b border-green-100 pb-2 mb-2">
+                <span class="font-bold text-green-900">${cls}</span>
+                <span class="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded font-bold">✓ 全勤</span>
+              </div>
+              <p class="text-xs text-green-700">實到：${cardData.presentCount} / ${cardData.totalCount} 人</p>
+            `;
           } else {
-            span.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-100 text-gray-400 border border-gray-200 flex items-center gap-1';
-            span.innerHTML = `⏳ ${cls} (未點名)`;
+            // 已點名：有人請假
+            let listHtml = cardData.absentDetails.map(d => {
+              let pStr = '';
+              if (d.periods && d.periods.length === 9) {
+                pStr = '全天';
+              } else if (d.periods) {
+                pStr = d.periods.map(p => periodNameMap[p]).join(',');
+              }
+              return `<div class="text-xs bg-white border border-red-200 text-red-700 px-2 py-1.5 rounded mb-1.5 flex justify-between items-center shadow-sm">
+                <span class="font-bold">${d.seatNo}號</span>
+                <span class="bg-red-100 px-1.5 py-0.5 rounded text-[11px]">${d.type}</span>
+                <span class="text-gray-500 text-[11px]">${pStr}</span>
+              </div>`;
+            }).join('');
+
+            card.className = 'border border-red-200 bg-red-50/40 rounded-xl p-4 shadow-sm';
+            card.innerHTML = `
+              <div class="flex justify-between items-center border-b border-red-200 pb-2 mb-2">
+                <span class="font-bold text-red-900">${cls}</span>
+                <span class="text-xs bg-red-600 text-white px-2 py-0.5 rounded font-bold">缺席 ${cardData.absentCount} 人</span>
+              </div>
+              <div class="mt-2">
+                ${listHtml}
+              </div>
+            `;
           }
-          badgeContainer.appendChild(span);
+
+          cardsContainer.appendChild(card);
         });
 
       } catch (err) {
@@ -213,7 +248,7 @@
       }
     }
 
-    // 2. 載入月份明細表格
+    // 2. 載入歷史月份明細
     async function loadData() {
       const monthSelected = document.getElementById('monthFilter').value;
       const classSelected = document.getElementById('classFilter').value;
@@ -244,7 +279,6 @@
           fetchedDocs.push({ id: doc.id, ...doc.data() });
         });
 
-        // 依日期與班級排序 (最新日期在前)
         fetchedDocs.sort((a, b) => b.date.localeCompare(a.date) || a.className.localeCompare(b.className));
 
         renderTable();
@@ -291,7 +325,7 @@
       });
     }
 
-    // 匯出至 Excel 檔
+    // 匯出 Excel
     function exportToExcel() {
       if (fetchedDocs.length === 0) {
         alert('目前沒有資料可供匯出！');
@@ -301,7 +335,6 @@
       const monthStr = document.getElementById('monthFilter').value;
       const exportData = [];
 
-      // 建立標題列：共 9 個時段
       const header = [
         "日期", "班級", "座號", "假別", 
         "導師時間", "第1節", "第2節", "第3節", "第4節", "午休", "第5節", "第6節", "第7節"
