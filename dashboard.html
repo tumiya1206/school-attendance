@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>屏東市民生國小出缺勤行政管理後台</title>
+  <title>民生國小 - 出缺勤行政管理後台</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -18,7 +18,7 @@
       <div class="flex items-center space-x-3">
         <img src="https://www.msps.ptc.edu.tw/uploads/1711081122959z3rux6p2.png" alt="校徽" class="w-12 h-12 object-contain">
         <div>
-          <h1 class="text-2xl font-bold text-gray-800">屏東市民生國小 - 出缺勤行政管理後台</h1>
+          <h1 class="text-2xl font-bold text-gray-800">屏東市民生國小出缺勤行政管理後台</h1>
           <p class="text-xs text-gray-500">當日即時缺勤名單與歷史數據統計</p>
         </div>
       </div>
@@ -153,28 +153,34 @@
 
     let fetchedDocs = [];
 
-    // 🛠️ 班級名稱正規化工具（防止數字/國字/空白不合導致卡片對不上）
+    // 取得台灣本地 YYYY-MM-DD 格式
+    function getTaiwanTodayStr() {
+      const now = new Date();
+      const offsetMs = now.getTimezoneOffset() * 60000;
+      const localTime = new Date(now.getTime() - offsetMs);
+      return localTime.toISOString().split('T')[0];
+    }
+
+    // 班級名稱規範化 (自動處理國字與數字轉換)
     function normalizeClassName(name) {
       if (!name) return "";
-      let str = name.trim()
+      return name.trim()
         .replace(/1/g, "一").replace(/2/g, "二")
         .replace(/3/g, "三").replace(/4/g, "四")
         .replace(/5/g, "五").replace(/6/g, "六");
-      return str;
     }
 
     window.onload = function() {
-      const today = new Date();
-      const monthStr = today.toISOString().substring(0, 7);
-      document.getElementById('monthFilter').value = monthStr;
+      const todayStr = getTaiwanTodayStr();
+      document.getElementById('monthFilter').value = todayStr.substring(0, 7);
 
       loadTodayData();
       loadData();
     };
 
-    // 1. 載入當日全校卡片與名單 (已加入廣義比對與除錯)
+    // 1. 載入當日全校卡片 (使用本地時區與寬鬆匹配)
     async function loadTodayData() {
-      const todayStr = new Date().toISOString().substring(0, 10);
+      const todayStr = getTaiwanTodayStr();
       document.getElementById('todayDateStr').innerText = `(${todayStr})`;
 
       try {
@@ -186,10 +192,10 @@
 
         snapshot.forEach(doc => {
           const data = doc.data();
-          console.log("今日撈出的資料：", doc.id, data);
+          console.log("今日撈出紀錄：", doc.id, data);
           
-          const normalizedClass = normalizeClassName(data.className);
-          todayMap[normalizedClass] = data;
+          const normKey = normalizeClassName(data.className);
+          todayMap[normKey] = data;
           doneCount++;
           totalTodayAbsent += (data.absentCount || 0);
         });
@@ -202,8 +208,8 @@
         cardsContainer.innerHTML = '';
 
         allSchoolClasses.forEach(cls => {
-          const normalizedKey = normalizeClassName(cls);
-          const cardData = todayMap[normalizedKey];
+          const normCls = normalizeClassName(cls);
+          const cardData = todayMap[normCls];
           const card = document.createElement('div');
 
           if (!cardData) {
@@ -216,7 +222,7 @@
               </div>
               <p class="text-xs text-gray-400">導師尚未傳送今日點名資料</p>
             `;
-          } else if (cardData.absentCount === 0) {
+          } else if (!cardData.absentCount || cardData.absentCount === 0) {
             // 已點名：全勤
             card.className = 'border border-green-200 bg-green-50/50 rounded-xl p-4';
             card.innerHTML = `
@@ -224,11 +230,11 @@
                 <span class="font-bold text-green-900">${cls}</span>
                 <span class="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded font-bold">✓ 全勤</span>
               </div>
-              <p class="text-xs text-green-700">實到：${cardData.presentCount} / ${cardData.totalCount} 人</p>
+              <p class="text-xs text-green-700">實到：${cardData.presentCount || cardData.totalCount || '-'} 人</p>
             `;
           } else {
-            // 已點名：有人請假
-            let listHtml = cardData.absentDetails.map(d => {
+            // 已點名：有缺席名單
+            let listHtml = (cardData.absentDetails || []).map(d => {
               let pStr = '';
               if (d.periods && d.periods.length === 9) {
                 pStr = '全天';
@@ -262,7 +268,7 @@
       }
     }
 
-    // 2. 載入歷史月份明細 (未動，維持完整性)
+    // 2. 載入歷史月份明細
     async function loadData() {
       const monthSelected = document.getElementById('monthFilter').value;
       const classSelected = document.getElementById('classFilter').value;
@@ -339,7 +345,7 @@
       });
     }
 
-    // 匯出 Excel (未動，維持完整性)
+    // 匯出 Excel
     function exportToExcel() {
       if (fetchedDocs.length === 0) {
         alert('目前沒有資料可供匯出！');
