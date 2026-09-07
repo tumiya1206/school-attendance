@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>屏東市民生國小 - 班級點名系統</title>
+  <title>屏東市民生國小電子晨檢簿</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -15,9 +15,9 @@
     <div class="bg-blue-600 p-6 text-white text-center shadow-md">
       <div class="flex justify-center items-center gap-3 mb-2">
         <img src="https://www.msps.ptc.edu.tw/uploads/1711081122959z3rux6p2.png" alt="校徽" class="w-10 h-10 object-contain bg-white rounded-full p-1">
-        <h1 class="text-xl font-black tracking-wide">屏東市民生國小 - 班級點名系統</h1>
+        <h1 class="text-xl font-black tracking-wide">屏東市民生國小電子晨檢簿<</h1>
       </div>
-      <p class="text-xs text-blue-100 font-medium">每日出缺勤登記表（導師專用）</p>
+      <p class="text-xs text-blue-100 font-medium">每日出缺勤登記表</p>
     </div>
 
     <form id="attendanceForm" onsubmit="submitAttendance(event)" class="p-6 space-y-6">
@@ -48,8 +48,10 @@
       <!-- 人數資訊區 -->
       <div class="flex items-center justify-between bg-blue-50/50 p-4 rounded-xl border border-blue-100">
         <div>
-          <span class="text-xs text-slate-500 block">班級應到人數</span>
-          <input type="number" id="totalCount" value="25" min="1" required class="w-20 p-1.5 text-center font-bold text-slate-800 border rounded-md text-sm mt-0.5"> 人
+          <span class="text-xs text-slate-500 block mb-1">班級應到人數</span>
+          <select id="totalCount" onchange="onTotalCountChange()" class="p-2 border rounded-lg bg-white text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500">
+            <!-- 15 ~ 28 人選單（動態由 JS 或預設呈現） -->
+          </select> 人
         </div>
         <div class="text-right">
           <span class="text-xs text-slate-500 block">今日缺席人數</span>
@@ -112,7 +114,49 @@
 
     window.onload = function() {
       document.getElementById('attDate').value = getTaiwanTodayStr();
+      initTotalCountSelect();
     };
+
+    // 初始化應到人數選單 (15 ~ 28 人)
+    function initTotalCountSelect() {
+      const select = document.getElementById('totalCount');
+      select.innerHTML = '';
+      for (let i = 15; i <= 28; i++) {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.innerText = `${i}`;
+        if (i === 25) opt.selected = true; // 預設 25 人
+        select.appendChild(opt);
+      }
+    }
+
+    // 當應到人數變更時，更新所有現有缺席項目的座號選單範圍
+    function onTotalCountChange() {
+      const currentTotal = parseInt(document.getElementById('totalCount').value) || 25;
+      document.querySelectorAll('.absent-item').forEach(item => {
+        const rowId = item.dataset.rowId;
+        const seatSelect = document.getElementById(`seat_${rowId}`);
+        if (seatSelect) {
+          const currentSelectedVal = seatSelect.value;
+          updateSeatOptions(seatSelect, currentTotal);
+          // 若原本選的座號仍在範圍內，則保持選取
+          if (currentSelectedVal && parseInt(currentSelectedVal) <= currentTotal) {
+            seatSelect.value = currentSelectedVal;
+          }
+        }
+      });
+    }
+
+    // 動態生成座號下拉選單 (1 ~ N 號)
+    function updateSeatOptions(selectElem, total) {
+      selectElem.innerHTML = '<option value="">座號</option>';
+      for (let i = 1; i <= total; i++) {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.innerText = `${i} 號`;
+        selectElem.appendChild(opt);
+      }
+    }
 
     function onDateOrClassChange() {
       updatePeriodButtonsVisibility();
@@ -159,12 +203,13 @@
 
       const dateVal = document.getElementById('attDate').value;
       const validPeriods = getValidPeriodsForDate(dateVal);
+      const totalCount = parseInt(document.getElementById('totalCount').value) || 25;
 
       const div = document.createElement('div');
       div.className = "absent-item bg-red-50/50 border border-red-200 rounded-xl p-3.5 space-y-3 relative";
       div.dataset.rowId = rowId;
 
-      // 產生節次按鈕（非當天節次直接加上 hidden 或 disabled）
+      // 產生節次按鈕
       let pButtonsHtml = periodNames.map((pName, idx) => {
         const isValid = validPeriods.includes(idx);
         const displayStyle = isValid ? '' : 'display: none;';
@@ -182,7 +227,9 @@
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-2">
             <span class="text-xs font-bold text-red-700">座號:</span>
-            <input type="number" id="seat_${rowId}" min="1" max="50" required placeholder="座號" class="w-16 p-1.5 text-center text-sm border rounded font-bold">
+            <select id="seat_${rowId}" required class="p-1.5 border rounded font-bold text-sm bg-white text-slate-800">
+              <!-- 動態產生座號選項 -->
+            </select>
           </div>
           <div class="flex items-center gap-2">
             <span class="text-xs font-bold text-red-700">假別:</span>
@@ -214,8 +261,12 @@
 
       list.appendChild(div);
 
+      // 填入座號選單
+      const seatSelect = document.getElementById(`seat_${rowId}`);
+      updateSeatOptions(seatSelect, totalCount);
+
       if (defaultData) {
-        document.getElementById(`seat_${rowId}`).value = defaultData.seatNo;
+        seatSelect.value = defaultData.seatNo;
         document.getElementById(`type_${rowId}`).value = defaultData.type;
         if (defaultData.periods) {
           defaultData.periods.forEach(pIdx => {
@@ -237,11 +288,11 @@
         const isValid = validPeriods.includes(pIdx);
 
         if (!isValid) {
-          btn.style.display = 'none'; // 沒有課的節次直接隱藏
+          btn.style.display = 'none';
           btn.classList.remove('bg-red-600', 'text-white', 'border-red-600');
           btn.classList.add('bg-white', 'text-slate-600', 'border-slate-300');
         } else {
-          btn.style.display = ''; // 有課的節次顯示
+          btn.style.display = '';
         }
       });
     }
@@ -309,7 +360,10 @@
 
         if (docSnap.exists) {
           const data = docSnap.data();
-          if (data.totalCount) document.getElementById('totalCount').value = data.totalCount;
+          if (data.totalCount) {
+            document.getElementById('totalCount').value = data.totalCount;
+            onTotalCountChange();
+          }
 
           if (data.absentDetails && data.absentDetails.length > 0) {
             data.absentDetails.forEach(detail => addAbsentRow(detail));
@@ -327,7 +381,7 @@
 
       const dateVal = document.getElementById('attDate').value;
       const classVal = document.getElementById('attClass').value;
-      const totalCount = parseInt(document.getElementById('totalCount').value) || 0;
+      const totalCount = parseInt(document.getElementById('totalCount').value) || 25;
       const monthVal = dateVal.substring(0, 7);
 
       if (!dateVal || !classVal) {
@@ -341,9 +395,15 @@
 
       for (let item of absentItems) {
         const rowId = item.dataset.rowId;
-        const seatNo = parseInt(document.getElementById(`seat_${rowId}`).value);
+        const seatNoVal = document.getElementById(`seat_${rowId}`).value;
         const type = document.getElementById(`type_${rowId}`).value;
 
+        if (!seatNoVal) {
+          alert('有請假項目的座號未選擇！');
+          return;
+        }
+
+        const seatNo = parseInt(seatNoVal);
         const selectedPeriods = [];
         const btns = document.querySelectorAll(`.period-btn-${rowId}`);
         btns.forEach(btn => {
@@ -352,11 +412,6 @@
             selectedPeriods.push(pIdx);
           }
         });
-
-        if (!seatNo) {
-          alert('有請假項目的座號未填寫！');
-          return;
-        }
 
         if (selectedPeriods.length === 0) {
           alert(`${seatNo} 號未選擇任何請假節次！`);
