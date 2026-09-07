@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>班級晨檢簿</title>
+  <title>屏東市民生國小 - 班級點名系統</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -13,8 +13,11 @@
     
     <!-- 頁首標題區 -->
     <div class="bg-blue-600 p-6 text-white text-center shadow-md">
-      <h1 class="text-xl font-black tracking-wide">屏東市民生國小電子晨檢簿</h1>
-      <p class="text-xs text-blue-100 font-medium mt-1">每日出缺勤登記表（導師專用）</p>
+      <div class="flex justify-center items-center gap-3 mb-2">
+        <img src="https://www.msps.ptc.edu.tw/uploads/1711081122959z3rux6p2.png" alt="校徽" class="w-10 h-10 object-contain bg-white rounded-full p-1">
+        <h1 class="text-xl font-black tracking-wide">屏東市民生國小 - 班級點名系統</h1>
+      </div>
+      <p class="text-xs text-blue-100 font-medium">每日出缺勤登記表（導師專用）</p>
     </div>
 
     <form id="attendanceForm" onsubmit="submitAttendance(event)" class="p-6 space-y-6">
@@ -64,7 +67,7 @@
         </div>
 
         <div id="absentList" class="space-y-3">
-          <!-- 缺席項目區域 -->
+          <!-- 缺席項目範本區域 -->
         </div>
 
         <p id="noAbsentText" class="text-xs text-slate-400 text-center py-6 border border-dashed rounded-xl bg-slate-50">
@@ -112,11 +115,11 @@
     };
 
     function onDateOrClassChange() {
-      updateDayLimits();
+      updatePeriodButtonsVisibility();
       checkExistingAttendance();
     }
 
-    // 依據日期判斷開放節次索引陣列
+    // 依據日期判斷當天開放的節次索引（0~8）
     function getValidPeriodsForDate(dateStr) {
       if (!dateStr) return [0,1,2,3,4,5,6,7,8];
       const d = new Date(dateStr + "T00:00:00");
@@ -134,10 +137,11 @@
       }
     }
 
-    // 當日期變更時，刷新現有按鈕可否點選狀態
-    function updateDayLimits() {
+    // 當日期變更時，自動更新並隱藏/禁用沒上課的節次按鈕
+    function updatePeriodButtonsVisibility() {
       const dateVal = document.getElementById('attDate').value;
       if (!dateVal) return;
+
       const validPeriods = getValidPeriodsForDate(dateVal);
 
       document.querySelectorAll('.absent-item').forEach(item => {
@@ -160,16 +164,16 @@
       div.className = "absent-item bg-red-50/50 border border-red-200 rounded-xl p-3.5 space-y-3 relative";
       div.dataset.rowId = rowId;
 
+      // 產生節次按鈕（非當天節次直接加上 hidden 或 disabled）
       let pButtonsHtml = periodNames.map((pName, idx) => {
         const isValid = validPeriods.includes(idx);
-        const disAttr = isValid ? '' : 'disabled';
-        const disabledClass = isValid ? 'border-slate-300 bg-white text-slate-600' : 'opacity-30 bg-slate-200 cursor-not-allowed border-slate-300 text-slate-400';
+        const displayStyle = isValid ? '' : 'display: none;';
 
         return `<button type="button" 
                   data-period="${idx}" 
-                  ${disAttr}
+                  style="${displayStyle}"
                   onclick="togglePeriod('${rowId}', ${idx})" 
-                  class="period-btn-${rowId} text-[11px] border py-1 rounded font-semibold transition ${disabledClass}">
+                  class="period-btn-${rowId} text-[11px] border py-1.5 rounded font-semibold transition border-slate-300 bg-white text-slate-600">
                   ${pName}
                 </button>`;
       }).join('');
@@ -225,7 +229,7 @@
       updateAbsentCount();
     }
 
-    // 刷新節次按鈕開關
+    // 當切換日期時，刷新按鈕顯示狀態
     function refreshPeriodButtons(rowId, validPeriods) {
       const btns = document.querySelectorAll(`.period-btn-${rowId}`);
       btns.forEach((btn) => {
@@ -233,11 +237,11 @@
         const isValid = validPeriods.includes(pIdx);
 
         if (!isValid) {
-          btn.disabled = true;
-          btn.className = `period-btn-${rowId} text-[11px] border py-1 rounded font-semibold transition opacity-30 bg-slate-200 cursor-not-allowed border-slate-300 text-slate-400`;
-        } else if (!btn.classList.contains('bg-red-600')) {
-          btn.disabled = false;
-          btn.className = `period-btn-${rowId} text-[11px] border py-1 rounded font-semibold transition border-slate-300 bg-white text-slate-600`;
+          btn.style.display = 'none'; // 沒有課的節次直接隱藏
+          btn.classList.remove('bg-red-600', 'text-white', 'border-red-600');
+          btn.classList.add('bg-white', 'text-slate-600', 'border-slate-300');
+        } else {
+          btn.style.display = ''; // 有課的節次顯示
         }
       });
     }
@@ -253,15 +257,15 @@
         if (parseInt(btn.dataset.period) === periodIdx) {
           const isSelected = forceState !== null ? forceState : !btn.classList.contains('bg-red-600');
           if (isSelected) {
-            btn.className = `period-btn-${rowId} text-[11px] border py-1 rounded font-semibold transition bg-red-600 border-red-600 text-white shadow-sm`;
+            btn.className = `period-btn-${rowId} text-[11px] border py-1.5 rounded font-semibold transition bg-red-600 border-red-600 text-white shadow-sm`;
           } else {
-            btn.className = `period-btn-${rowId} text-[11px] border py-1 rounded font-semibold transition border-slate-300 bg-white text-slate-600`;
+            btn.className = `period-btn-${rowId} text-[11px] border py-1.5 rounded font-semibold transition border-slate-300 bg-white text-slate-600`;
           }
         }
       });
     }
 
-    // 當日全選（僅勾選當日有效節次）
+    // 當日全選（只會選取當天實際有上課的節次）
     function selectAllPeriods(rowId) {
       const dateVal = document.getElementById('attDate').value;
       const validPeriods = getValidPeriodsForDate(dateVal);
