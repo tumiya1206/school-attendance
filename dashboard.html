@@ -3,109 +3,74 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>晨間點名行政儀表板</title>
+  <title>民生國小 - 出缺勤行政管理後台</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- 引入 SheetJS 處理 Excel 產出 -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <!-- 引入 SheetJS 用於匯出 Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
-<body class="bg-gray-50 p-6">
-  <div class="max-w-7xl mx-auto space-y-6">
+<body class="bg-gray-100 min-h-screen p-6">
+  <div class="max-w-6xl mx-auto bg-white rounded-2xl shadow-xl p-6">
     
-    <!-- 頁頭與控制區 -->
-    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-6 rounded-2xl shadow-sm gap-4">
-      <div class="flex items-center gap-4">
-        <!-- 校徽圖示 -->
-        <img src="https://www.msps.ptc.edu.tw/uploads/1711081122959z3rux6p2.png" alt="民生國小校徽" class="w-14 h-14 object-contain">
-        <div>
-          <h1 class="text-3xl font-bold text-gray-800">全校晨間點名儀表板</h1>
-          <p class="text-sm text-gray-500 mt-1">即時檢視、歷史查詢與學籍系統對接匯出</p>
-        </div>
+    <!-- 標題與圖示 -->
+    <div class="flex items-center justify-between border-b pb-4 mb-6">
+      <div class="flex items-center space-x-3">
+        <img src="https://www.msps.ptc.edu.tw/uploads/1711081122959z3rux6p2.png" alt="校徽" class="w-12 h-12 object-contain">
+        <h1 class="text-2xl font-bold text-gray-800">屏東市民生國小 - 出缺勤行政管理後台</h1>
       </div>
+      <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-xl shadow flex items-center gap-2">
+        📊 匯出月報表 (Excel)
+      </button>
+    </div>
 
-      <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-        <!-- 📅 歷史日期查詢區 -->
-        <div class="bg-blue-50 p-3 rounded-xl border border-blue-200 flex items-center gap-2">
-          <div>
-            <label class="block text-xs font-bold text-blue-800 mb-1">📅 選擇查詢日期</label>
-            <input type="date" id="datePicker" onchange="changeSearchDate(this.value)" class="p-2 border border-blue-300 rounded-lg text-sm bg-white font-semibold outline-none focus:ring-2 focus:ring-blue-500">
-          </div>
-          <button onclick="setToday()" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-2 rounded-lg text-xs shadow transition">
-            今天
-          </button>
-        </div>
-
-        <!-- 📊 月份選擇與匯出 Excel 區 -->
-        <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-200 flex items-center gap-2">
-          <div>
-            <label class="block text-xs font-bold text-emerald-800 mb-1">📊 匯出學籍系統 Excel 匯入檔</label>
-            <input type="month" id="monthPicker" class="p-2 border border-emerald-300 rounded-lg text-sm bg-white font-semibold outline-none focus:ring-2 focus:ring-emerald-500">
-          </div>
-          <button onclick="exportOfficialExcel()" class="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-lg text-xs shadow transition">
-            匯出 Excel (.xlsx)
-          </button>
-        </div>
+    <!-- 篩選器條件區 -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
+      <div>
+        <label class="block text-xs font-bold text-gray-600 mb-1">📅 查詢月份</label>
+        <input type="month" id="monthFilter" onchange="loadData()" class="w-full p-2.5 border rounded-lg bg-white text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-600 mb-1">🏫 班級篩選</label>
+        <select id="classFilter" onchange="loadData()" class="w-full p-2.5 border rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="ALL">全部班級</option>
+          <option value="一年一班">一年一班</option>
+          <option value="二年一班">二年一班</option>
+          <option value="三年一班">三年一班</option>
+          <option value="四年一班">四年一班</option>
+          <option value="四年二班">四年二班</option>
+          <option value="五年一班">五年一班</option>
+          <option value="五年二班">五年二班</option>
+          <option value="六年一班">六年一班</option>
+          <option value="六年二班">六年二班</option>
+        </select>
+      </div>
+      <div class="flex items-end">
+        <button onclick="loadData()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg shadow">
+          🔍 查詢紀錄
+        </button>
       </div>
     </div>
 
-    <!-- 顯示當前檢視的日期區 -->
-    <div class="flex items-center justify-between bg-blue-600 text-white p-4 rounded-xl shadow-md">
-      <div class="flex items-center gap-2">
-        <span class="text-xl">🔍</span>
-        <span class="font-bold text-lg">目前檢視日期：</span>
-        <span id="selectedDateDisplay" class="text-xl font-extrabold underline decoration-yellow-400"></span>
-      </div>
-      <span id="todayBadge" class="bg-yellow-400 text-gray-900 font-bold px-3 py-1 rounded-full text-xs" style="display:none;">今日最新</span>
-    </div>
-
-    <!-- 頂部數據卡片 -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div class="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-blue-500">
-        <div class="text-sm text-gray-500 font-bold">該日已回報班級</div>
-        <div id="reportedCount" class="text-3xl font-bold text-gray-800 mt-2">0 / 9 班</div>
-      </div>
-      <div class="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-green-500">
-        <div class="text-sm text-gray-500 font-bold">該日全校出席率</div>
-        <div id="attendanceRate" class="text-3xl font-bold text-gray-800 mt-2">0%</div>
-      </div>
-      <div class="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-red-500">
-        <div class="text-sm text-gray-500 font-bold">該日全校總缺席人數</div>
-        <div id="totalAbsentCount" class="text-3xl font-bold text-red-600 mt-2">0 人</div>
-      </div>
-    </div>
-
-    <!-- 指定日期各班明細表格 -->
-    <div class="bg-white p-6 rounded-2xl shadow-sm">
-      <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-        <span>📋</span> <span id="tableTitleDate"></span> 各班點名紀錄明細
-      </h2>
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="border-b bg-gray-50 text-gray-600 text-sm">
-              <th class="p-3">班級</th>
-              <th class="p-3">狀態</th>
-              <th class="p-3">出席 / 應到</th>
-              <th class="p-3">缺席明細（座號 / 假別 / 節次）</th>
-            </tr>
-          </thead>
-          <tbody id="todayTableBody" class="divide-y text-gray-700"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- 分析圖表區 -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div class="bg-white p-6 rounded-2xl shadow-sm">
-        <h2 class="text-xl font-bold text-gray-800 mb-4">近 7 日每日缺席人數趨勢</h2>
-        <canvas id="dailyChart" class="w-full h-64"></canvas>
-      </div>
-      <div class="bg-white p-6 rounded-2xl shadow-sm">
-        <h2 class="text-xl font-bold text-gray-800 mb-4">本月各班累計缺席次數</h2>
-        <canvas id="classChart" class="w-full h-64"></canvas>
-      </div>
+    <!-- 資料表格 -->
+    <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+      <table class="w-full text-left text-sm text-gray-600">
+        <thead class="bg-gray-100 text-gray-700 font-bold uppercase text-xs border-b">
+          <tr>
+            <th class="p-3">日期</th>
+            <th class="p-3">班級</th>
+            <th class="p-3 text-center">應到</th>
+            <th class="p-3 text-center">實到</th>
+            <th class="p-3 text-center">缺席</th>
+            <th class="p-3">缺席詳細名單與節次</th>
+          </tr>
+        </thead>
+        <tbody id="attendanceTbody" class="divide-y divide-gray-200">
+          <tr>
+            <td colspan="6" class="p-4 text-center text-gray-400">請選擇月份以載入資料...</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
@@ -122,266 +87,158 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    const classList = ['一年一班','二年一班','三年一班','四年一班','四年二班','五年一班','五年二班','六年一班','六年二班'];
-    
-    // 假別對應代碼字典
-    const leaveTypeCodeMap = {
-      '事假': 1,
-      '病假': 2,
-      '公假': 3,
-      '喪假': 4,
-      '曠課': 5
+    let fetchedDocs = [];
+
+    // 時段名稱對照表 (0:導師時間, 1~4:第1~4節, 5:午休, 6~8:第5~7節)
+    const periodNameMap = {
+      0: "導師時間",
+      1: "第1節",
+      2: "第2節",
+      3: "第3節",
+      4: "第4節",
+      5: "午休",
+      6: "第5節",
+      7: "第6節",
+      8: "第7節"
     };
-
-    // 國小國字轉換為數字年級與班級
-    const chineseToNumMap = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 };
-
-    function parseClassInfo(className) {
-      const yearChar = className.charAt(0);
-      const classChar = className.charAt(2);
-      const grade = chineseToNumMap[yearChar] || '';
-      const cls = chineseToNumMap[classChar] || '';
-      return { grade: grade.toString(), classNo: cls.toString() };
-    }
-
-    const realTodayStr = new Date().toISOString().split('T')[0];
-    let currentQueryDate = realTodayStr;
-    let unsubscribe = null;
 
     window.onload = function() {
-      document.getElementById('datePicker').value = realTodayStr;
-      document.getElementById('monthPicker').value = realTodayStr.substring(0, 7);
-      listenDateRecords(realTodayStr);
-      loadCharts();
+      const today = new Date();
+      const monthStr = today.toISOString().substring(0, 7);
+      document.getElementById('monthFilter').value = monthStr;
+      loadData();
     };
 
-    function setToday() {
-      document.getElementById('datePicker').value = realTodayStr;
-      changeSearchDate(realTodayStr);
+    async function loadData() {
+      const monthSelected = document.getElementById('monthFilter').value;
+      const classSelected = document.getElementById('classFilter').value;
+      const tbody = document.getElementById('attendanceTbody');
+
+      if (!monthSelected) {
+        alert('請先選擇查詢月份！');
+        return;
+      }
+
+      tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-500">資料讀取中...</td></tr>';
+
+      try {
+        let query = db.collection('attendance').where('month', '==', monthSelected);
+        if (classSelected !== 'ALL') {
+          query = query.where('className', '==', classSelected);
+        }
+
+        const snapshot = await query.get();
+        fetchedDocs = [];
+
+        if (snapshot.empty) {
+          tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">查無此月份的點名紀錄</td></tr>';
+          return;
+        }
+
+        snapshot.forEach(doc => {
+          fetchedDocs.push({ id: doc.id, ...doc.data() });
+        });
+
+        // 依日期與班級排序
+        fetchedDocs.sort((a, b) => a.date.localeCompare(b.date) || a.className.localeCompare(b.className));
+
+        renderTable();
+      } catch (err) {
+        console.error("讀取資料失敗：", err);
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-red-500">載入失敗：${err.message}</td></tr>`;
+      }
     }
 
-    function changeSearchDate(selectedDate) {
-      if (!selectedDate) return;
-      currentQueryDate = selectedDate;
-      listenDateRecords(selectedDate);
-    }
-
-    function listenDateRecords(targetDate) {
-      document.getElementById('selectedDateDisplay').textContent = targetDate;
-      document.getElementById('tableTitleDate').textContent = targetDate;
-      
-      const badge = document.getElementById('todayBadge');
-      badge.style.display = targetDate === realTodayStr ? 'inline-block' : 'none';
-
-      if (unsubscribe) unsubscribe();
-
-      unsubscribe = db.collection('attendance').where('date', '==', targetDate).onSnapshot(snapshot => {
-        const records = {};
-        snapshot.forEach(doc => { records[doc.data().className] = doc.data(); });
-        renderTableAndCards(records);
-      });
-    }
-
-    // 格式化節次文字
-    function formatPeriodsText(periods) {
-      if (!periods || periods.length === 0) return '';
-      const clean = [...new Set(periods)].sort((a, b) => a - b);
-      return clean.length >= 7 ? '全天' : `第${clean.join(',')}節`;
-    }
-
-    function renderTableAndCards(records) {
-      const tbody = document.getElementById('todayTableBody');
+    function renderTable() {
+      const tbody = document.getElementById('attendanceTbody');
       tbody.innerHTML = '';
-      let reportedNum = 0, totalPresent = 0, totalStudents = 0, totalAbsent = 0;
 
-      classList.forEach(c => {
-        const rec = records[c];
-        const isReported = !!rec;
-        if (isReported) {
-          reportedNum++;
-          totalPresent += rec.presentCount;
-          totalStudents += rec.totalCount;
-          totalAbsent += rec.absentCount;
-        }
-
-        let absentDetailsText = '全員到齊';
-        if (isReported && rec.absentCount > 0) {
-          if (rec.absentDetails && rec.absentDetails.length > 0) {
-            absentDetailsText = rec.absentDetails.map(d => {
-              const pStr = formatPeriodsText(d.periods);
-              return `${d.seatNo}號[${d.type || '事假'}${pStr ? '-' + pStr : ''}]`;
-            }).join('； ');
-          } else if (rec.absentList && rec.absentList.length > 0) {
-            absentDetailsText = rec.absentList.join('； ');
-          }
-          absentDetailsText += ` (${rec.absentCount}人)`;
-        }
-
+      fetchedDocs.forEach(doc => {
         const tr = document.createElement('tr');
+        tr.className = 'hover:bg-gray-50 border-b';
+
+        let detailBadges = '';
+        if (doc.absentDetails && doc.absentDetails.length > 0) {
+          detailBadges = doc.absentDetails.map(d => {
+            let pStr = '';
+            if (d.periods && d.periods.length === 9) {
+              pStr = '全天';
+            } else if (d.periods) {
+              pStr = d.periods.map(p => periodNameMap[p]).join(',');
+            }
+            return `<span class="inline-block bg-red-100 text-red-700 text-xs px-2 py-1 rounded-md font-semibold mr-1 mb-1">
+              ${d.seatNo}號 [${d.type} - ${pStr}]
+            </span>`;
+          }).join('');
+        } else {
+          detailBadges = '<span class="text-green-600 font-semibold text-xs">全勤（無缺席）</span>';
+        }
+
         tr.innerHTML = `
-          <td class="p-3 font-semibold">${c}</td>
-          <td class="p-3">${isReported ? '<span class="bg-green-100 text-green-700 px-2.5 py-1 rounded-full text-xs font-bold">✅ 已回報</span>' : '<span class="bg-gray-100 text-gray-500 px-2.5 py-1 rounded-full text-xs font-bold">❌ 未回報</span>'}</td>
-          <td class="p-3">${isReported ? `${rec.presentCount} / ${rec.totalCount} 人` : '-'}</td>
-          <td class="p-3 text-red-600 font-bold">${isReported ? absentDetailsText : '-'}</td>
+          <td class="p-3 font-semibold text-gray-700">${doc.date}</td>
+          <td class="p-3 font-semibold text-gray-800">${doc.className}</td>
+          <td class="p-3 text-center font-bold text-gray-600">${doc.totalCount}</td>
+          <td class="p-3 text-center font-bold text-green-600">${doc.presentCount}</td>
+          <td class="p-3 text-center font-bold ${doc.absentCount > 0 ? 'text-red-600' : 'text-gray-400'}">${doc.absentCount}</td>
+          <td class="p-3">${detailBadges}</td>
         `;
         tbody.appendChild(tr);
       });
-
-      document.getElementById('reportedCount').textContent = `${reportedNum} / ${classList.length} 班`;
-      document.getElementById('totalAbsentCount').textContent = `${totalAbsent} 人`;
-      document.getElementById('attendanceRate').textContent = totalStudents > 0 ? `${((totalPresent / totalStudents) * 100).toFixed(1)}%` : '0%';
     }
 
-    // 🎯 匯出完全符合「教育部學籍系統出缺席匯入範本」格式的 Excel 檔
-    async function exportOfficialExcel() {
-      const selectedMonth = document.getElementById('monthPicker').value;
-      if (!selectedMonth) {
-        alert('請選擇匯出月份！');
+    // 匯出至 Excel 檔
+    function exportToExcel() {
+      if (fetchedDocs.length === 0) {
+        alert('目前沒有資料可供匯出！');
         return;
       }
 
-      const snapshot = await db.collection('attendance').where('month', '==', selectedMonth).get();
-      if (snapshot.empty) {
-        alert(`找不到 ${selectedMonth} 月份的點名紀錄！`);
-        return;
-      }
+      const monthStr = document.getElementById('monthFilter').value;
+      const exportData = [];
 
-      // 建立工作表內容陣列
-      const wsData = [
-        // 第 1 列：標題列
-        [
-          "年級\n(必填)", "班級\n(必填)", "座號\n(必填)", "學號\n(必填)", "姓名\n(必填)", "日期\n(必填)",
-          "出缺席節次(至少填一項)\n*僅能填寫縣市端開放的缺曠課種類代碼，可至「缺曠課種類代碼對照表」工作表確認",
-          "", "", "", "", "", "", "", "", "", "註記"
-        ],
-        // 第 2 列：節次標題
-        ["", "", "", "", "", "", "導師時間", "第1節", "第2節", "第3節", "第4節", "午休", "第5節", "第6節", "第7節", "第8節", ""],
-        // 第 3 列：官方範例列
-        ["8", "03", "10", "1120030", "王範例", "2024-11-26", 1, 1, 1, 1, 1, "", "", "", "", "", "範例"],
-        // 第 4 列：說明文字
-        ["*以上為範例，請勿刪除，請從第5列開始填", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+      // 建立標題列：共 9 個時段
+      const header = [
+        "日期", "班級", "座號", "假別", 
+        "導師時間", "第1節", "第2節", "第3節", "第4節", "午休", "第5節", "第6節", "第7節"
       ];
+      exportData.push(header);
 
-      const getClassOrder = (name) => classList.indexOf(name) !== -1 ? classList.indexOf(name) : 999;
-      let records = snapshot.docs.map(doc => doc.data());
-      records.sort((a, b) => {
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
-        return getClassOrder(a.className) - getClassOrder(b.className);
-      });
-
-      // 填充缺席紀錄數據
-      records.forEach(r => {
-        if (r.absentDetails && r.absentDetails.length > 0) {
-          const classInfo = parseClassInfo(r.className);
-          
-          r.absentDetails.forEach(s => {
-            const leaveCode = leaveTypeCodeMap[s.type] || 1;
+      fetchedDocs.forEach(doc => {
+        if (doc.absentDetails && doc.absentDetails.length > 0) {
+          doc.absentDetails.forEach(s => {
+            // 建立 9 個時段欄位預設值
+            const periodCols = Array(9).fill("");
             
-            // 建立 10 個節次對應欄位：
-            // [0]導師時間, [1]第1節, [2]第2節, [3]第3節, [4]第4節, [5]午休, [6]第5節, [7]第6節, [8]第7節, [9]第8節
-            let periodCells = Array(10).fill("");
-            
-            if (s.periods && s.periods.length > 0) {
-              const cleanPeriods = [...new Set(s.periods)].sort((a, b) => a - b);
-              
-              cleanPeriods.forEach(p => {
-                const pNum = parseInt(p, 10);
-                
-                // 1. 如果傳入 0 或字串包含 "導師"，對應 [0] 導師時間
-                if (pNum === 0 || p === '0' || p === '導師時間') {
-                  periodCells[0] = leaveCode;
-                }
-                // 2. 如果是 1~4 節，對應 [1]~[4]
-                else if (pNum >= 1 && pNum <= 4) {
-                  periodCells[pNum] = leaveCode;
-                } 
-                // 3. 如果是 5 或字串包含 "午休"，對應 [5] 午休
-                else if (pNum === 5 && (p === '午休' || cleanPeriods.length > 7)) {
-                  periodCells[5] = leaveCode;
-                }
-                // 4. 如果是 5~7 節（代表下午第5~7節課），對應到 [6]~[8]
-                else if (pNum >= 5 && pNum <= 7) {
-                  periodCells[pNum + 1] = leaveCode;
-                }
-                // 5. 如果是 第8節，對應 [9]
-                else if (pNum === 8) {
-                  periodCells[9] = leaveCode;
+            if (s.periods) {
+              s.periods.forEach(pIdx => {
+                if (pIdx >= 0 && pIdx <= 8) {
+                  periodCols[pIdx] = "V"; // 勾選請假時段
                 }
               });
             }
 
-            wsData.push([
-              classInfo.grade,     // 年級
-              classInfo.classNo,   // 班級
-              s.seatNo,            // 座號
-              "",                  // 學號
-              "",                  // 姓名
-              r.date,              // 日期
-              ...periodCells,      // 10 個節次欄位
-              ""                   // 註記
-            ]);
+            const row = [
+              doc.date,
+              doc.className,
+              `${s.seatNo}號`,
+              s.type,
+              ...periodCols // 依序展開為 9 個欄位
+            ];
+            exportData.push(row);
           });
         }
       });
 
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      if (exportData.length === 1) {
+        alert('該月份無任何缺席紀錄，無需匯出缺席細節。');
+        return;
+      }
 
-      ws['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } },
-        { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },
-        { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } },
-        { s: { r: 0, c: 3 }, e: { r: 1, c: 3 } },
-        { s: { r: 0, c: 4 }, e: { r: 1, c: 4 } },
-        { s: { r: 0, c: 5 }, e: { r: 1, c: 5 } },
-        { s: { r: 0, c: 6 }, e: { r: 0, c: 15 } },
-        { s: { r: 0, c: 16 }, e: { r: 1, c: 16 } }
-      ];
+      const worksheet = XLSX.utils.aoa_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "缺席名單明細");
 
-      XLSX.utils.book_append_sheet(wb, ws, "出缺席匯入");
-
-      const codeData = [
-        ["代碼", "缺曠課種類"],
-        [1, "事假"],
-        [2, "病假"],
-        [3, "公假"],
-        [4, "喪假"],
-        [5, "曠課"],
-        [6, "其他(納入畢業出席率計算)"],
-        [7, "其他(不納入畢業出席率計算)"],
-        [8, "遲到"]
-      ];
-      const wsCode = XLSX.utils.aoa_to_sheet(codeData);
-      XLSX.utils.book_append_sheet(wb, wsCode, "缺曠課種類代碼對照表");
-
-      XLSX.writeFile(wb, `${selectedMonth}_學校出缺席匯入檔.xlsx`);
-    }
-
-    async function loadCharts() {
-      const snapshot = await db.collection('attendance').get();
-      const allData = snapshot.docs.map(doc => doc.data());
-
-      const last7Days = Array.from({length: 7}, (_, i) => {
-        const d = new Date(); d.setDate(d.getDate() - (6 - i));
-        return d.toISOString().split('T')[0];
-      });
-
-      const dailyMap = {}; last7Days.forEach(day => dailyMap[day] = 0);
-      allData.forEach(d => { if (dailyMap[d.date] !== undefined) dailyMap[d.date] += d.absentCount; });
-
-      new Chart(document.getElementById('dailyChart'), {
-        type: 'line',
-        data: { labels: last7Days, datasets: [{ label: '缺席總人數', data: Object.values(dailyMap), borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.3 }] }
-      });
-
-      const currentMonth = realTodayStr.substring(0, 7);
-      const classMap = {}; classList.forEach(c => classMap[c] = 0);
-      allData.filter(d => d.date && d.date.startsWith(currentMonth)).forEach(d => { if (classMap[d.className] !== undefined) classMap[d.className] += d.absentCount; });
-
-      new Chart(document.getElementById('classChart'), {
-        type: 'bar',
-        data: { labels: classList, datasets: [{ label: '本月累計缺席次數', data: Object.values(classMap), backgroundColor: '#ef4444' }] }
-      });
+      XLSX.writeFile(workbook, `民生國小出缺勤明細_${monthStr}.xlsx`);
     }
   </script>
 </body>
