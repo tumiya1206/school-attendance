@@ -3,15 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>全校晨間點名系統</title>
+  <title>班級晨間點名與補登系統</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <!-- 引入 SheetJS 用於導出 Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen p-4">
   <div class="max-w-md mx-auto bg-white rounded-2xl shadow-md p-6 relative">
     
-    <!-- 頂部標題與校徽區 -->
+    <!-- 頂部標題區 -->
     <div class="flex flex-col items-center justify-center mb-6">
       <img src="logo.png" alt="校徽" class="w-16 h-16 object-contain mb-2" onerror="this.style.display='none'">
       <h2 class="text-2xl font-bold text-gray-800">班級點名與補登系統</h2>
@@ -57,9 +59,18 @@
     <div id="info" class="text-center text-sm text-gray-500 mb-4">請選擇日期與班級</div>
     <div id="studentGrid" class="grid grid-cols-4 gap-2 mb-6"></div>
 
-    <button id="submitBtn" onclick="submit()" style="display:none;" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition disabled:bg-gray-400 disabled:cursor-not-allowed">
-      提交點名紀錄
-    </button>
+    <!-- 按鈕區 -->
+    <div class="space-y-3">
+      <button id="submitBtn" onclick="submit()" style="display:none;" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition disabled:bg-gray-400 disabled:cursor-not-allowed">
+        提交點名紀錄
+      </button>
+
+      <!-- 🟢 導師班級 Excel 匯出按鈕 -->
+      <button id="exportExcelBtn" onclick="exportClassMonthlyExcel()" style="display:none;" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+        匯出本班月報表 (Excel)
+      </button>
+    </div>
   </div>
 
   <!-- 缺席細節設定彈窗 Modal -->
@@ -119,14 +130,12 @@
 
     let seatsData = [];
     let currentEditIdx = null;
-    let isExpired = false; // 是否超過補登期限
+    let isExpired = false;
 
     window.onload = function() {
-      // 預設日期為今天
       const todayStr = new Date().toISOString().split('T')[0];
       document.getElementById('attendanceDate').value = todayStr;
 
-      // 初始化人數選單
       const countSelect = document.getElementById('countSelect');
       for (let i = 18; i <= 28; i++) {
         let opt = document.createElement('option');
@@ -136,23 +145,16 @@
       }
     };
 
-    // 檢查選定日期是否已經超過次月 2 日的補登期限
     function checkDeadline(selectedDateStr) {
       if (!selectedDateStr) return false;
-
       const [year, month, day] = selectedDateStr.split('-').map(Number);
-      
-      // 計算補登截止時間：次月 2 日 23:59:59
-      // Date 物件中月份為 0-indexed，次月 2 日可以寫成 new Date(year, month, 2, 23, 59, 59)
       const deadlineDate = new Date(year, month, 2, 23, 59, 59);
       const now = new Date();
 
-      // 顯示補登提示訊息
       const targetMonthStr = `${month}月`;
       const deadlineMonthStr = `${deadlineDate.getMonth() + 1}月2日`;
       document.getElementById('deadlineTip').textContent = `📌 ${targetMonthStr}紀錄補登截止時間：${deadlineDate.getFullYear()}/${deadlineMonthStr} 23:59`;
 
-      // 判斷現在時間是否已超過截止時間
       return now > deadlineDate;
     }
 
@@ -161,18 +163,20 @@
       const className = document.getElementById('classSelect').value;
       const totalCount = parseInt(document.getElementById('countSelect').value, 10);
 
+      const submitBtn = document.getElementById('submitBtn');
+      const exportExcelBtn = document.getElementById('exportExcelBtn');
+      const lockWarning = document.getElementById('lockWarning');
+
       if (!selectedDate || !className || !totalCount) {
         document.getElementById('studentGrid').innerHTML = '';
-        document.getElementById('submitBtn').style.display = 'none';
-        document.getElementById('lockWarning').classList.add('hidden');
+        submitBtn.style.display = 'none';
+        exportExcelBtn.style.display = 'none';
+        lockWarning.classList.add('hidden');
         document.getElementById('info').textContent = '請先選擇日期、班級與人數';
         return;
       }
 
-      // 驗證是否逾期
       isExpired = checkDeadline(selectedDate);
-      const submitBtn = document.getElementById('submitBtn');
-      const lockWarning = document.getElementById('lockWarning');
 
       if (isExpired) {
         lockWarning.classList.remove('hidden');
@@ -182,7 +186,6 @@
         submitBtn.disabled = false;
       }
 
-      // 預設產生出席狀態數據
       seatsData = Array.from({ length: totalCount }, (_, i) => ({
         seatNo: i + 1,
         absent: false,
@@ -190,7 +193,6 @@
         periods: [1,2,3,4,5,6,7]
       }));
 
-      // 試著從資料庫讀取該日期與班級的歷史紀錄（若是補登或重複點名）
       const docId = `${selectedDate}_${className}`;
       try {
         const doc = await db.collection('attendance').doc(docId).get();
@@ -211,7 +213,9 @@
 
       renderGrid();
       document.getElementById('info').textContent = `${selectedDate} ${className}（共 ${totalCount} 人）${isExpired ? ' [已鎖定唯讀]' : ''}`;
+      
       submitBtn.style.display = 'block';
+      exportExcelBtn.style.display = 'block'; // 顯示 Excel 匯出按鈕
     }
 
     function renderGrid() {
@@ -225,7 +229,6 @@
         let subText = s.absent ? `${s.type}(${s.periods.length}節)` : '出席';
         btn.innerHTML = `<div class="text-base">${s.seatNo}號</div><div class="text-xs font-semibold ${s.absent ? 'text-red-600' : 'text-green-600'}">${subText}</div>`;
         
-        // 若已逾期，禁用點擊彈窗功能
         btn.onclick = () => {
           if (isExpired) {
             alert('⚠️ 該月份補登期限已過，無法修改缺席紀錄！');
@@ -324,6 +327,121 @@
           alert('提交失敗：' + error.message);
           btn.disabled = false; btn.innerText = '提交點名紀錄';
         }
+      }
+    }
+
+    // 🟢 導師班級專用 Excel 匯出邏輯 (對齊行政規格)
+    async function exportClassMonthlyExcel() {
+      const selectedDate = document.getElementById('attendanceDate').value;
+      const className = document.getElementById('classSelect').value;
+      const totalCount = parseInt(document.getElementById('countSelect').value, 10);
+
+      if (!selectedDate || !className) {
+        alert('請先選擇日期與班級！');
+        return;
+      }
+
+      const [yearStr, monthStr] = selectedDate.split('-');
+      const targetMonthStr = `${yearStr}-${monthStr}`;
+      const daysInMonth = new Date(parseInt(yearStr, 10), parseInt(monthStr, 10), 0).getDate();
+
+      alert(`正在載入 ${targetMonthStr} ${className} 月報表數據，請稍候...`);
+
+      try {
+        // 從 Firebase 撈取該班級當月所有紀錄
+        const snapshot = await db.collection('attendance')
+          .where('className', '==', className)
+          .where('month', '==', targetMonthStr)
+          .get();
+
+        // 整理每日數據: { '01': [absentDetails], '02': ... }
+        const dailyRecords = {};
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          const dayNum = parseInt(data.date.split('-')[2], 10);
+          dailyRecords[dayNum] = data.absentDetails || [];
+        });
+
+        // 建立 Excel 表格標頭
+        const headerRow1 = [`【屏東縣民生國小】${yearStr}年${monthStr}月 學生缺勤紀錄統計表`];
+        const headerRow2 = [`班級：${className}`, '', '', `列印日期：${new Date().toLocaleDateString('zh-TW')}`];
+        
+        const tableHeader = ['座號'];
+        for (let d = 1; d <= daysInMonth; d++) {
+          tableHeader.push(`${d}日`);
+        }
+        tableHeader.push('事假', '病假', '公假', '喪假', '曠課', '總計節數');
+
+        const excelRows = [headerRow1, headerRow2, [], tableHeader];
+
+        // 統計容器
+        const leaveTypes = ['事假', '病假', '公假', '喪假', '曠課'];
+        const dailyTypeStats = {}; // 每日各假別小計
+        for (let d = 1; d <= daysInMonth; d++) dailyTypeStats[d] = 0;
+
+        // 填寫每個座號的月紀錄
+        for (let seatNo = 1; seatNo <= totalCount; seatNo++) {
+          const row = [`${seatNo}號`];
+          const studentLeaveCounts = { '事假': 0, '病假': 0, '公假': 0, '喪假': 0, '曠課': 0 };
+
+          for (let d = 1; d <= daysInMonth; d++) {
+            const dayAbsents = dailyRecords[d] || [];
+            const studentAbsent = dayAbsents.find(a => a.seatNo === seatNo);
+
+            if (studentAbsent) {
+              const type = studentAbsent.type || '事假';
+              const pCount = studentAbsent.periods ? studentAbsent.periods.length : 7;
+              studentLeaveCounts[type] = (studentLeaveCounts[type] || 0) + pCount;
+              dailyTypeStats[d] += pCount;
+
+              const periodText = pCount === 7 ? '全' : studentAbsent.periods.join(',');
+              row.push(`${type}(${periodText})`);
+            } else {
+              row.push('');
+            }
+          }
+
+          let totalPeriods = 0;
+          leaveTypes.forEach(t => {
+            row.push(studentLeaveCounts[t] || 0);
+            totalPeriods += (studentLeaveCounts[t] || 0);
+          });
+          row.push(totalPeriods);
+
+          excelRows.push(row);
+        }
+
+        // 底部：每日小計行
+        const footerRow = ['每日缺勤節數'];
+        let monthTotalPeriods = 0;
+        for (let d = 1; d <= daysInMonth; d++) {
+          footerRow.push(dailyTypeStats[d]);
+          monthTotalPeriods += dailyTypeStats[d];
+        }
+        leaveTypes.forEach(() => footerRow.push(''));
+        footerRow.push(monthTotalPeriods);
+        excelRows.push(footerRow);
+
+        // 建立 Sheet 並設置欄寬
+        const ws = XLSX.utils.aoa_to_sheet(excelRows);
+        
+        // 設定欄寬 Auto width
+        const colWidths = [{ wch: 8 }]; // 座號欄
+        for (let d = 1; d <= daysInMonth; d++) colWidths.push({ wch: 10 }); // 日期欄
+        leaveTypes.forEach(() => colWidths.push({ wch: 6 }));
+        colWidths.push({ wch: 10 });
+        ws['!cols'] = colWidths;
+
+        // 建立 Workbook 並下載
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, `${className}_${monthStr}月報表`);
+
+        const fileName = `${yearStr}年${monthStr}月_${className}_學生缺勤月報表.xlsx`;
+        XLSX.writeFile(wb, fileName);
+
+      } catch (err) {
+        console.error("匯出 Excel 失敗:", err);
+        alert('匯出失敗：' + err.message);
       }
     }
   </script>
