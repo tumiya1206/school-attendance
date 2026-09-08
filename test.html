@@ -3,16 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>出勤補登記與學校行事曆</title>
+  <title>屏東市民生國小班級電子晨檢簿與學校行事曆</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
 <body class="bg-slate-100 min-h-screen p-4 md:p-6">
 
-  <!-- Responsive Grid: 手機單欄，電腦版 (3 : 6 : 3) -->
+  <!-- 三欄式響應式網頁佈局 (大螢幕：3 : 6 : 3) -->
   <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
 
     <!-- ================= 左側：當週學校行事曆 (大螢幕佔 3 欄) ================= -->
-    <div class="lg:col-span-3 bg-white rounded-xl shadow-md p-5 space-y-4">
+    <div class="lg:col-span-3 bg-white rounded-2xl shadow-md p-5 space-y-4">
       <div class="border-b pb-3">
         <div class="flex items-center justify-between mb-1">
           <h3 class="text-base font-bold text-slate-800 flex items-center gap-1.5">
@@ -26,73 +28,157 @@
       </div>
 
       <!-- 當週行程列表 container -->
-      <div id="weeklyCalendar" class="space-y-3 text-xs max-h-[70vh] overflow-y-auto pr-1">
+      <div id="weeklyCalendar" class="space-y-3 text-xs max-h-[75vh] overflow-y-auto pr-1">
         <!-- JS 動態帶入當週行政、教導、總務事項 -->
       </div>
     </div>
 
-    <!-- ================= 中間：補點名 / 補登記表單 (大螢幕佔 6 欄，視覺重點) ================= -->
-    <div class="lg:col-span-6 bg-white rounded-xl shadow-md p-6 space-y-5">
-      <div class="flex items-center space-x-3 border-b pb-3">
-        <img src="https://www.msps.ptc.edu.tw/uploads/1711081122959z3rux6p2.png" alt="校徽" class="w-10 h-10 object-contain bg-white rounded-full p-0.5 border border-slate-200">
-        <div>
-          <h2 class="text-xl font-bold text-slate-800">出勤補點名 / 補登記申請</h2>
-          <p class="text-xs text-slate-500">請填寫缺勤或補點名資料，送出後將由系統進行記錄</p>
+    <!-- ================= 中間：屏東市民生國小班級電子晨檢簿 (大螢幕佔 6 欄) ================= -->
+    <div class="lg:col-span-6 bg-white rounded-2xl shadow-md p-6 relative">
+      
+      <!-- 頂部標題區 -->
+      <div class="flex flex-col items-center justify-center mb-6 text-center">
+        <img src="https://www.msps.ptc.edu.tw/uploads/1711081122959z3rux6p2.png" alt="民生國小校徽" class="w-16 h-16 object-contain mb-2">
+        <h2 class="text-xl md:text-2xl font-bold text-gray-800">屏東市民生國小班級電子晨檢簿</h2>
+      </div>
+      
+      <div class="space-y-4 mb-6">
+        <!-- 📅 點名/補登日期選擇 -->
+        <div class="bg-blue-50 p-3 rounded-xl border border-blue-200">
+          <label class="block text-sm font-bold text-blue-900 mb-1">📅 點名 / 補登日期</label>
+          <input type="date" id="attendanceDate" onchange="checkAndGenerate()" class="w-full p-2.5 border border-blue-300 rounded-lg text-sm bg-white font-semibold outline-none focus:ring-2 focus:ring-blue-500">
+          <p id="deadlineTip" class="text-xs font-semibold mt-1.5 text-blue-700"></p>
+        </div>
+
+        <!-- 🏫 選擇班級 與 👥 選擇人數 (雙欄排列節省空間) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-1">1. 選擇班級</label>
+            <select id="classSelect" onchange="checkAndGenerate()" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+              <option value="">-- 請選擇班級 --</option>
+              <option value="一年一班">一年一班</option>
+              <option value="二年一班">二年一班</option>
+              <option value="三年一班">三年一班</option>
+              <option value="四年一班">四年一班</option>
+              <option value="四年二班">四年二班</option>
+              <option value="五年一班">五年一班</option>
+              <option value="五年二班">五年二班</option>
+              <option value="六年一班">六年一班</option>
+              <option value="六年二班">六年二班</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-1">2. 選擇該班人數 (15~28人)</label>
+            <select id="countSelect" onchange="checkAndGenerate()" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"></select>
+          </div>
         </div>
       </div>
 
-      <form id="retroactiveForm" class="space-y-4">
-        <div>
-          <label for="recordDate" class="block text-sm font-medium text-slate-700 mb-1">
-            補登記日期 <span class="text-xs text-rose-500">（截止日：次月 2 號 23:59 止）</span>
-          </label>
-          <input 
-            type="date" 
-            id="recordDate" 
-            name="recordDate"
-            required
-            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none border-slate-300 text-sm"
-          >
-        </div>
+      <!-- 逾期警告標語 -->
+      <div id="lockWarning" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4 text-sm font-bold text-center">
+        ⚠️ 該月份已超過補登期限（次月 2 日截止），無法修改或提交！
+      </div>
 
-        <!-- 錯誤提示訊息區域 -->
-        <div id="errorAlert" class="hidden p-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-lg text-sm"></div>
+      <div id="info" class="text-center text-sm text-gray-500 mb-4">請選擇日期與班級</div>
+      
+      <!-- 座號點名按鈕區 -->
+      <div id="studentGrid" class="grid grid-cols-4 sm:grid-cols-5 gap-2 mb-6"></div>
 
-        <div>
-          <label for="reason" class="block text-sm font-medium text-slate-700 mb-1">補登記事由 / 備註</label>
-          <textarea 
-            id="reason" 
-            name="reason" 
-            rows="4" 
-            required
-            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none border-slate-300 text-sm"
-            placeholder="請輸入補點名原因或說明..."
-          ></textarea>
-        </div>
-
-        <button 
-          type="submit" 
-          id="submitBtn"
-          class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors shadow-sm disabled:bg-slate-300 disabled:cursor-not-allowed"
-        >
-          送出申請
-        </button>
-      </form>
+      <!-- 按鈕區 -->
+      <button id="submitBtn" onclick="submit()" style="display:none;" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition disabled:bg-gray-400 disabled:cursor-not-allowed">
+        提交點名紀錄
+      </button>
     </div>
 
-    <!-- ================= 右側：預留區塊 (大螢幕佔 3 欄，供日後擴充) ================= -->
-    <div class="lg:col-span-3 bg-slate-50/70 border-2 border-dashed border-slate-300 rounded-xl p-6 min-h-[300px] flex flex-col items-center justify-center text-center text-slate-400">
+    <!-- ================= 右側：預留區塊 (大螢幕佔 3 欄) ================= -->
+    <div class="lg:col-span-3 bg-slate-50/70 border-2 border-dashed border-slate-300 rounded-2xl p-6 min-h-[300px] flex flex-col items-center justify-center text-center text-slate-400">
       <svg class="w-10 h-10 mb-2 stroke-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       <p class="text-sm font-medium">預留擴充區塊</p>
-      <p class="text-xs text-slate-400 mt-1">（日後可放入常用連結、公告或最新審核紀錄）</p>
+      <p class="text-xs text-slate-400 mt-1">（日後可放入常用連結、校內公告或最新審核紀錄）</p>
     </div>
 
   </div>
 
+  <!-- 缺席細節設定彈窗 Modal -->
+  <div id="modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 id="modalTitle" class="text-lg font-bold text-gray-800">設定缺席明細</h3>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">假別</label>
+        <select id="leaveTypeSelect" class="w-full p-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="事假">事假</option>
+          <option value="病假">病假</option>
+          <option value="公假">公假</option>
+          <option value="喪假">喪假</option>
+          <option value="曠課">曠課</option>
+        </select>
+      </div>
+
+      <div>
+        <div class="flex justify-between items-center mb-1">
+          <label class="block text-sm font-semibold text-gray-700">請假節次</label>
+          <button type="button" onclick="toggleAllPeriods()" class="text-xs text-blue-600 font-bold">全選 / 全不選</button>
+        </div>
+        <!-- 9 個時段選項 (導師時間[0]、1~4節[1~4]、午休[5]、5~7節[6~8]) -->
+        <div class="grid grid-cols-3 gap-2 text-xs">
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="0"> <span>導師時間</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="1"> <span>第1節</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="2"> <span>第2節</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="3"> <span>第3節</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="4"> <span>第4節</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="5"> <span>午休</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="6"> <span>第5節</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="7"> <span>第6節</span></label>
+          <label class="flex items-center space-x-1 border p-2 rounded-lg cursor-pointer"><input type="checkbox" class="period-cb" value="8"> <span>第7節</span></label>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button onclick="clearStudentAbsent()" class="w-1/3 py-2.5 bg-gray-200 text-gray-700 font-bold rounded-xl">改為出席</button>
+        <button onclick="saveStudentAbsent()" class="w-2/3 py-2.5 bg-blue-600 text-white font-bold rounded-xl shadow">儲存設定</button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    // 115學年度第1學期完整的學校行事曆資料
+    /* ================= 1. Firebase 初始化 ================= */
+    const firebaseConfig = {
+      apiKey: "AIzaSyBqdSFkDkjka6hewD9hEfY39KIErVonz1I",
+      authDomain: "school-attendance-5c91c.firebaseapp.com",
+      projectId: "school-attendance-5c91c",
+      storageBucket: "school-attendance-5c91c.firebasestorage.app",
+      messagingSenderId: "3254054266",
+      appId: "1:3254054266:web:246cd39b057a916ebafac3",
+      measurementId: "G-PRV1QQM6ML"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let seatsData = [];
+    let currentEditIdx = null;
+    let isExpired = false;
+
+    // 時段顯示文字對照表
+    const periodNameMap = {
+      0: '導師時間',
+      1: '第1節',
+      2: '第2節',
+      3: '第3節',
+      4: '第4節',
+      5: '午休',
+      6: '第5節',
+      7: '第6節',
+      8: '第7節'
+    };
+
+    /* ================= 2. 115學年度第1學期學校行事曆資料 ================= */
     const schoolEvents = [
       {
         week: "一",
@@ -285,14 +371,26 @@
       }
     ];
 
-    // 動態載入當週行事曆
-    function renderCurrentWeekEvents() {
+    /* ================= 3. 頁面初始化與行事曆渲染 ================= */
+    window.onload = function() {
       const todayStr = new Date().toISOString().split('T')[0];
-      
-      // 尋找今天屬於哪一週，若不在範圍內預設顯示當下週次
-      let currentEvent = schoolEvents.find(e => todayStr >= e.startDate && todayStr <= e.endDate);
+      document.getElementById('attendanceDate').value = todayStr;
+
+      const countSelect = document.getElementById('countSelect');
+      for (let i = 15; i <= 28; i++) {
+        let opt = document.createElement('option');
+        opt.value = i; opt.textContent = i + ' 人';
+        if (i === 28) opt.selected = true;
+        countSelect.appendChild(opt);
+      }
+
+      renderCalendar(todayStr);
+    };
+
+    function renderCalendar(targetDateStr) {
+      let currentEvent = schoolEvents.find(e => targetDateStr >= e.startDate && targetDateStr <= e.endDate);
       if (!currentEvent) {
-        currentEvent = schoolEvents[1]; // 預設顯示第二週（09/07 ~ 09/13）
+        currentEvent = schoolEvents[1]; // 若選取的日期不在學期範圍內，預設顯示第二週
       }
 
       document.getElementById('currentWeekBadge').textContent = `第 ${currentEvent.week} 週`;
@@ -301,17 +399,12 @@
       const container = document.getElementById('weeklyCalendar');
       let html = '';
 
-      // 產生行政事項區塊
       if (currentEvent.admin.length > 0) {
         html += renderSection('🏛️ 行政/校務', currentEvent.admin, 'bg-slate-50 border-slate-200 text-slate-700');
       }
-
-      // 產生教導處事項區塊
       if (currentEvent.academic.length > 0) {
         html += renderSection('📚 教導處', currentEvent.academic, 'bg-blue-50 border-blue-200 text-blue-800');
       }
-
-      // 產生總務處事項區塊
       if (currentEvent.general.length > 0) {
         html += renderSection('🔧 總務處', currentEvent.general, 'bg-amber-50 border-amber-200 text-amber-800');
       }
@@ -331,28 +424,201 @@
       `;
     }
 
-    // 補登記表單截止日檢查邏輯
-    const recordDateInput = document.getElementById('recordDate');
-    const submitBtn = document.getElementById('submitBtn');
-    const errorAlert = document.getElementById('errorAlert');
+    /* ================= 4. 點名系統的核心邏輯 ================= */
+    function checkDeadline(selectedDateStr) {
+      if (!selectedDateStr) return false;
+      const [year, month, day] = selectedDateStr.split('-').map(Number);
+      const deadlineDate = new Date(year, month, 2, 23, 59, 59);
+      const now = new Date();
 
-    recordDateInput.addEventListener('change', function() {
-      if (!this.value) return;
-      const recDate = new Date(this.value);
-      const today = new Date();
-      const deadline = new Date(recDate.getFullYear(), recDate.getMonth() + 1, 2, 23, 59, 59);
+      const targetMonthStr = `${month}月`;
+      const deadlineMonthStr = `${deadlineDate.getMonth() + 1}月2日`;
+      document.getElementById('deadlineTip').textContent = `📌 ${targetMonthStr}紀錄補登截止時間：${deadlineDate.getFullYear()}/${deadlineMonthStr} 23:59`;
 
-      if (today > deadline) {
-        errorAlert.textContent = '⚠️ 該月份補登記已於次月 2 號截止，目前無法進行補登記！';
-        errorAlert.classList.remove('hidden');
+      return now > deadlineDate;
+    }
+
+    async function checkAndGenerate() {
+      const selectedDate = document.getElementById('attendanceDate').value;
+      const className = document.getElementById('classSelect').value;
+      const totalCount = parseInt(document.getElementById('countSelect').value, 10);
+
+      const submitBtn = document.getElementById('submitBtn');
+      const lockWarning = document.getElementById('lockWarning');
+
+      // 當點名日期改變時，左側行事曆同步動態切換到該週！
+      if (selectedDate) {
+        renderCalendar(selectedDate);
+      }
+
+      if (!selectedDate || !className || !totalCount) {
+        document.getElementById('studentGrid').innerHTML = '';
+        submitBtn.style.display = 'none';
+        lockWarning.classList.add('hidden');
+        document.getElementById('info').textContent = '請先選擇日期、班級與人數';
+        return;
+      }
+
+      isExpired = checkDeadline(selectedDate);
+
+      if (isExpired) {
+        lockWarning.classList.remove('hidden');
         submitBtn.disabled = true;
       } else {
-        errorAlert.classList.add('hidden');
+        lockWarning.classList.add('hidden');
         submitBtn.disabled = false;
       }
-    });
 
-    window.addEventListener('DOMContentLoaded', renderCurrentWeekEvents);
+      // 預設請假時選擇全部時段 [0~8]
+      seatsData = Array.from({ length: totalCount }, (_, i) => ({
+        seatNo: i + 1,
+        absent: false,
+        type: '事假',
+        periods: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+      }));
+
+      const docId = `${selectedDate}_${className}`;
+      try {
+        const doc = await db.collection('attendance').doc(docId).get();
+        if (doc.exists) {
+          const data = doc.data();
+          if (data.absentDetails) {
+            data.absentDetails.forEach(detail => {
+              const idx = seatsData.findIndex(s => s.seatNo === detail.seatNo);
+              if (idx !== -1) {
+                seatsData[idx] = { ...detail };
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.error("讀取歷史紀錄失敗:", err);
+      }
+
+      renderGrid();
+      document.getElementById('info').textContent = `${selectedDate} ${className}（共 ${totalCount} 人）${isExpired ? ' [已鎖定唯讀]' : ''}`;
+      
+      submitBtn.style.display = 'block';
+    }
+
+    function renderGrid() {
+      const grid = document.getElementById('studentGrid');
+      grid.innerHTML = '';
+      seatsData.forEach((s, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `p-2 rounded-xl font-bold text-center border-2 transition ${s.absent ? 'bg-red-50 text-red-700 border-red-500' : 'bg-green-50 text-green-800 border-green-500'}`;
+        
+        let subText = s.absent ? `${s.type}(${s.periods ? s.periods.length : 0}節)` : '出席';
+        btn.innerHTML = `<div class="text-base">${s.seatNo}號</div><div class="text-xs font-semibold ${s.absent ? 'text-red-600' : 'text-green-600'}">${subText}</div>`;
+        
+        btn.onclick = () => {
+          if (isExpired) {
+            alert('⚠️ 該月份補登期限已過，無法修改缺席紀錄！');
+            return;
+          }
+          openModal(idx);
+        };
+        grid.appendChild(btn);
+      });
+    }
+
+    /* ================= 5. Modal 彈窗操控 ================= */
+    function openModal(idx) {
+      currentEditIdx = idx;
+      const s = seatsData[idx];
+      document.getElementById('modalTitle').textContent = `設定 ${s.seatNo} 號缺席明細`;
+      document.getElementById('leaveTypeSelect').value = s.type || '事假';
+      
+      const cbs = document.querySelectorAll('.period-cb');
+      cbs.forEach(cb => {
+        cb.checked = s.absent ? (s.periods && s.periods.includes(parseInt(cb.value, 10))) : true;
+      });
+      
+      const modal = document.getElementById('modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function toggleAllPeriods() {
+      const cbs = document.querySelectorAll('.period-cb');
+      const allChecked = Array.from(cbs).every(cb => cb.checked);
+      cbs.forEach(cb => cb.checked = !allChecked);
+    }
+
+    function saveStudentAbsent() {
+      if (currentEditIdx === null) return;
+      const selectedPeriods = Array.from(document.querySelectorAll('.period-cb:checked')).map(cb => parseInt(cb.value, 10));
+      if (selectedPeriods.length === 0) {
+        alert('請至少選擇一個時段，或點擊「改為出席」！');
+        return;
+      }
+      seatsData[currentEditIdx].absent = true;
+      seatsData[currentEditIdx].type = document.getElementById('leaveTypeSelect').value;
+      seatsData[currentEditIdx].periods = selectedPeriods.sort((a,b) => a - b);
+      closeModal();
+      renderGrid();
+    }
+
+    function clearStudentAbsent() {
+      if (currentEditIdx === null) return;
+      seatsData[currentEditIdx].absent = false;
+      closeModal();
+      renderGrid();
+    }
+
+    /* ================= 6. 資料提交至 Firebase ================= */
+    async function submit() {
+      if (isExpired) {
+        alert('⚠️ 該月份點名已超過補登截止時間，無法提交！');
+        return;
+      }
+
+      const selectedDate = document.getElementById('attendanceDate').value;
+      const className = document.getElementById('classSelect').value;
+      
+      const absentList = seatsData.filter(s => s.absent).map(s => {
+        let periodStr = '';
+        if (s.periods.length === 9) {
+          periodStr = '全天';
+        } else {
+          periodStr = s.periods.map(p => periodNameMap[p]).join(',');
+        }
+        return `${s.seatNo}號[${s.type}-${periodStr}]`;
+      });
+      
+      const monthStr = selectedDate.substring(0, 7);
+      const docId = `${selectedDate}_${className}`;
+
+      if (confirm(`確認提交 ${selectedDate} ${className} 點名紀錄？\n缺席名單：\n${absentList.length > 0 ? absentList.join('\n') : '無（全員到齊）'}`)) {
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true; btn.innerText = '傳送中...';
+        try {
+          await db.collection('attendance').doc(docId).set({
+            date: selectedDate,
+            month: monthStr,
+            className: className,
+            totalCount: seatsData.length,
+            presentCount: seatsData.length - absentList.length,
+            absentCount: absentList.length,
+            absentList: absentList,
+            absentDetails: seatsData.filter(s => s.absent),
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          alert('提交成功！已存入點名紀錄。');
+          location.reload();
+        } catch (error) {
+          alert('提交失敗：' + error.message);
+          btn.disabled = false; btn.innerText = '提交點名紀錄';
+        }
+      }
+    }
   </script>
 </body>
 </html>
