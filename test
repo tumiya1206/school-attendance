@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>出勤補登記與學校行事曆</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen p-4 md:p-6">
+
+  <!-- Responsive Grid: 手機單欄，電腦版 (3 : 6 : 3) -->
+  <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+    <!-- ================= 左側：當週學校行事曆 (大螢幕佔 3 欄) ================= -->
+    <div class="lg:col-span-3 bg-white rounded-xl shadow-md p-5 space-y-4">
+      <div class="border-b pb-3">
+        <div class="flex items-center justify-between mb-1">
+          <h3 class="text-base font-bold text-slate-800 flex items-center gap-1.5">
+            📅 當週行事曆
+          </h3>
+          <span id="currentWeekBadge" class="text-xs font-bold px-2 py-0.5 bg-blue-100 text-blue-700 rounded-md">
+            第 - 週
+          </span>
+        </div>
+        <p id="weekRangeText" class="text-xs text-slate-500">日期：--/-- ~ --/--</p>
+      </div>
+
+      <!-- 當週行程列表 container -->
+      <div id="weeklyCalendar" class="space-y-3 text-xs max-h-[70vh] overflow-y-auto pr-1">
+        <!-- JS 動態帶入當週行政、教導、總務事項 -->
+      </div>
+    </div>
+
+    <!-- ================= 中間：補點名 / 補登記表單 (大螢幕佔 6 欄，視覺重點) ================= -->
+    <div class="lg:col-span-6 bg-white rounded-xl shadow-md p-6 space-y-5">
+      <div class="flex items-center space-x-3 border-b pb-3">
+        <img src="https://www.msps.ptc.edu.tw/uploads/1711081122959z3rux6p2.png" alt="校徽" class="w-10 h-10 object-contain bg-white rounded-full p-0.5 border border-slate-200">
+        <div>
+          <h2 class="text-xl font-bold text-slate-800">出勤補點名 / 補登記申請</h2>
+          <p class="text-xs text-slate-500">請填寫缺勤或補點名資料，送出後將由系統進行記錄</p>
+        </div>
+      </div>
+
+      <form id="retroactiveForm" class="space-y-4">
+        <div>
+          <label for="recordDate" class="block text-sm font-medium text-slate-700 mb-1">
+            補登記日期 <span class="text-xs text-rose-500">（截止日：次月 2 號 23:59 止）</span>
+          </label>
+          <input 
+            type="date" 
+            id="recordDate" 
+            name="recordDate"
+            required
+            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none border-slate-300 text-sm"
+          >
+        </div>
+
+        <!-- 錯誤提示訊息區域 -->
+        <div id="errorAlert" class="hidden p-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-lg text-sm"></div>
+
+        <div>
+          <label for="reason" class="block text-sm font-medium text-slate-700 mb-1">補登記事由 / 備註</label>
+          <textarea 
+            id="reason" 
+            name="reason" 
+            rows="4" 
+            required
+            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none border-slate-300 text-sm"
+            placeholder="請輸入補點名原因或說明..."
+          ></textarea>
+        </div>
+
+        <button 
+          type="submit" 
+          id="submitBtn"
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors shadow-sm disabled:bg-slate-300 disabled:cursor-not-allowed"
+        >
+          送出申請
+        </button>
+      </form>
+    </div>
+
+    <!-- ================= 右側：預留區塊 (大螢幕佔 3 欄，供日後擴充) ================= -->
+    <div class="lg:col-span-3 bg-slate-50/70 border-2 border-dashed border-slate-300 rounded-xl p-6 min-h-[300px] flex flex-col items-center justify-center text-center text-slate-400">
+      <svg class="w-10 h-10 mb-2 stroke-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <p class="text-sm font-medium">預留擴充區塊</p>
+      <p class="text-xs text-slate-400 mt-1">（日後可放入常用連結、公告或最新審核紀錄）</p>
+    </div>
+
+  </div>
+
+  <script>
+    // 115學年度第1學期完整的學校行事曆資料
+    const schoolEvents = [
+      {
+        week: "一",
+        startDate: "2026-08-31",
+        endDate: "2026-09-06",
+        dateRange: "08/31 ~ 09/06",
+        admin: ["【友善校園週】8/31~9/4", "開學正式上課 8/31(一)", "課後照顧開始 9/1(二)", "親師座談會 9/5(六) 8:50"],
+        academic: ["新生資料建立/學籍檢查", "班級及教師課表運行", "分發教科書與簿冊", "健康促進計畫通過 9/2"],
+        general: ["飲水設備檢修保養", "檢查遊戲器材", "8/26 飲用水送檢"]
+      },
+      {
+        week: "二",
+        startDate: "2026-09-07",
+        endDate: "2026-09-13",
+        dateRange: "09/07 ~ 09/13",
+        admin: ["圖書室開放借閱 9/7(一)", "英語學伴課程開始 9/8(二)", "學習扶助開始上課"],
+        academic: ["屏東縣語文競賽 9/12-13", "繳交全國學生美展作品", "防災預演 9/10(四) 8:00"],
+        general: ["註冊事宜及收費", "水電與消防設備檢視", "午餐與環境教育會議"]
+      },
+      {
+        week: "三",
+        startDate: "2026-09-14",
+        endDate: "2026-09-20",
+        dateRange: "09/14 ~ 09/20",
+        admin: [],
+        academic: ["防災預演檢討會 9/14(一)", "轉入生轉銜輔導 9/17(四)", "性剝削防制宣導 9/17(四)"],
+        general: ["註冊結束", "造報8月份經臨費月報表", "第一次班級家長代表會議"]
+      },
+      {
+        week: "四",
+        startDate: "2026-09-21",
+        endDate: "2026-09-27",
+        dateRange: "09/21 ~ 09/27",
+        admin: ["國家防災日 9/21(一)", "中秋節放假 9/25(五)"],
+        academic: ["全國防震防災演練 9/21 9:21", "優良暑假作業展覽 9/21-24", "一/四年級尿液蟯蟲檢查 9/24"],
+        general: ["10月份薪資請領", "電梯保養", "校園綠美化"]
+      },
+      {
+        week: "五",
+        startDate: "2026-09-28",
+        endDate: "2026-10-04",
+        dateRange: "09/28 ~ 10/04",
+        admin: ["教師節放假 9/28(一)", "各級學校定期公務報表填報"],
+        academic: ["鑑定安置資料初審 (10/1)", "兒童權利公約宣導 10/1", "六年級晨光日語 10/2"],
+        general: ["水電安全檢查", "飲水設備保養", "操場噴水系統維修"]
+      },
+      {
+        week: "六",
+        startDate: "2026-10-05",
+        endDate: "2026-10-11",
+        dateRange: "10/05 ~ 10/11",
+        admin: ["【生命教育月】第一週", "行動圖書車 10/6 9:00-12:00", "國慶日補假 10/9(五)", "國慶日放假 10/10(六)"],
+        academic: ["調閱三~六年級作文第一篇", "一/四年級健檢理學檢查 10/5", "6-1職探課程 10/6"],
+        general: ["學校動產資料整理", "消防設備檢視", "財產統計報表"]
+      },
+      {
+        week: "七",
+        startDate: "2026-10-12",
+        endDate: "2026-10-18",
+        dateRange: "10/12 ~ 10/18",
+        admin: ["【生命教育月】第二週", "6-1閱讀分享"],
+        academic: ["調閱閱讀學習單第1篇", "月經平權推廣 10/15", "六年級晨光日語 10/16"],
+        general: ["花木草皮修剪", "造報9月份經臨費月報表"]
+      },
+      {
+        week: "八",
+        startDate: "2026-10-19",
+        endDate: "2026-10-25",
+        dateRange: "10/19 ~ 10/25",
+        admin: ["【生命教育月】第三週", "【犯罪被害人保護週】", "光復節 10/25(日)"],
+        academic: ["流感疫苗施打 10/21(四)", "家暴宣導(勵馨) 10/22(四)", "第一次評量試題提出 10/23"],
+        general: ["檢修運動遊戲器材", "11月份薪資請領", "10/21 飲用水送檢"]
+      },
+      {
+        week: "九",
+        startDate: "2026-10-26",
+        endDate: "2026-11-01",
+        dateRange: "10/26 ~ 11/01",
+        admin: ["光復節補假 10/26(一)", "萬聖節英語節慶教學 10/27", "一年級注音符號闖關 10/30"],
+        academic: ["調閱英文習作", "普及化運動推廣宣導"],
+        general: ["飲水設備保養", "支出憑證整理"]
+      },
+      {
+        week: "十",
+        startDate: "2026-11-02",
+        endDate: "2026-11-08",
+        dateRange: "11/02 ~ 11/08",
+        admin: ["第一次定期評量 11/4(三)-5(四)", "第七屆台灣科學節 11/7-8"],
+        academic: ["第一次成績學籍系統登錄", "民生橋收件 11/2-6"],
+        general: ["校舍水電安全檢查", "廁所沖水及排水設備檢修"]
+      },
+      {
+        week: "十一",
+        startDate: "2026-11-09",
+        endDate: "2026-11-15",
+        dateRange: "11/09 ~ 11/15",
+        admin: ["【資安倫理教育週】", "戶外教學 11/10(二)"],
+        academic: ["交通安全保腦宣導 11/12", "提出校內語文競賽名單"],
+        general: ["造報10月份經臨費月報表", "消防設備維護"]
+      },
+      {
+        week: "十二",
+        startDate: "2026-11-16",
+        endDate: "2026-11-22",
+        dateRange: "11/16 ~ 11/22",
+        admin: ["5-1閱讀分享"],
+        academic: ["調閱作文第二篇", "兒童體適能檢測", "第2學期助理員申請"],
+        general: ["校園大門鐵捲門檢修保養", "12月份薪資請領"]
+      },
+      {
+        week: "十三",
+        startDate: "2026-11-23",
+        endDate: "2026-11-29",
+        dateRange: "11/23 ~ 11/29",
+        admin: ["【海洋教育週】", "行動圖書車 11/24 9:00-12:00"],
+        academic: ["調閱國語習作", "生命教育宣導 11/26(四)"],
+        general: ["11/24 建築物公共安全檢查", "校園排水溝清掃"]
+      },
+      {
+        week: "十四",
+        startDate: "2026-11-30",
+        endDate: "2026-12-06",
+        dateRange: "11/30 ~ 12/06",
+        admin: ["115年校慶運動會 12/5(六)", "屏東盃田徑錦標賽 12/5"],
+        academic: ["校內語文競賽月(12月)", "申請特教生專業團隊服務"],
+        general: ["校園草地割草", "辦理教育儲蓄戶申請作業"]
+      },
+      {
+        week: "十五",
+        startDate: "2026-12-07",
+        endDate: "2026-12-13",
+        dateRange: "12/07 ~ 12/13",
+        admin: ["【關懷身心障礙週】", "12/7(一) 運動會補假", "縣運暨公教運動會 12/11-13"],
+        academic: ["調閱自然習作", "家庭教育健康餐盤大挑戰 12/10"],
+        general: ["遊戲器材維護檢修", "飲水設備保養"]
+      },
+      {
+        week: "十六",
+        startDate: "2026-12-14",
+        endDate: "2026-12-20",
+        dateRange: "12/14 ~ 12/20",
+        admin: ["3-1閱讀分享"],
+        academic: ["調閱社會/生活習作", "性別平等教育宣導 12/17(四)"],
+        general: ["造報11月份經臨費月報表", "統購校慶所需物品"]
+      },
+      {
+        week: "十七",
+        startDate: "2026-12-21",
+        endDate: "2026-12-27",
+        dateRange: "12/21 ~ 12/27",
+        admin: ["聖誕節英語節慶教學 12/22", "行憲紀念日放假 12/25(五)"],
+        academic: ["調閱閱讀學習單第3篇", "藥物濫用防治宣導"],
+        general: ["元月份薪資請領", "財產盤點"]
+      },
+      {
+        week: "十八",
+        startDate: "2026-12-28",
+        endDate: "2026-01-03",
+        dateRange: "12/28 ~ 01/03",
+        admin: ["行動圖書車 12/29 9:00-12:00", "開國紀念日放假 1/1(五)"],
+        academic: ["調閱作文第三篇", "第二次評量試題提出 12/31"],
+        general: ["工友考核", "各班防災教育成果提交"]
+      },
+      {
+        week: "十九",
+        startDate: "2026-01-04",
+        endDate: "2026-01-10",
+        dateRange: "01/04 ~ 01/10",
+        admin: ["英語學伴課程結束 1/8(五)", "本土語言教學成果分享"],
+        academic: ["非評量科目成績登錄 1/8前", "完成課程評鑑成果 1/8前"],
+        general: ["校園排水溝清掃", "綠色採購業務宣導"]
+      },
+      {
+        week: "二十",
+        startDate: "2026-01-11",
+        endDate: "2026-01-17",
+        dateRange: "01/11 ~ 01/17",
+        admin: ["第二次定期評量 1/12(二)-13(三)", "期末校務會議"],
+        academic: ["學習榮譽卡頒獎", "學籍3.0系統完成成績 (1/15前)"],
+        general: ["校園環境安全檢修", "飲用水檢查清理"]
+      },
+      {
+        week: "二十一",
+        startDate: "2026-01-18",
+        endDate: "2026-01-20",
+        dateRange: "01/18 ~ 01/20",
+        admin: ["休業式 1/20(三)", "寒假開始 1/21(四)"],
+        academic: ["圖書室閉館整理", "各項期末檢討會議"],
+        general: ["辦理二手教科書/制服回收", "午餐與環境教育檢討會"]
+      }
+    ];
+
+    // 動態載入當週行事曆
+    function renderCurrentWeekEvents() {
+      const todayStr = new Date().toISOString().split('T')[0];
+      
+      // 尋找今天屬於哪一週，若不在範圍內預設顯示當下週次
+      let currentEvent = schoolEvents.find(e => todayStr >= e.startDate && todayStr <= e.endDate);
+      if (!currentEvent) {
+        currentEvent = schoolEvents[1]; // 預設顯示第二週（09/07 ~ 09/13）
+      }
+
+      document.getElementById('currentWeekBadge').textContent = `第 ${currentEvent.week} 週`;
+      document.getElementById('weekRangeText').textContent = `日期：${currentEvent.dateRange}`;
+
+      const container = document.getElementById('weeklyCalendar');
+      let html = '';
+
+      // 產生行政事項區塊
+      if (currentEvent.admin.length > 0) {
+        html += renderSection('🏛️ 行政/校務', currentEvent.admin, 'bg-slate-50 border-slate-200 text-slate-700');
+      }
+
+      // 產生教導處事項區塊
+      if (currentEvent.academic.length > 0) {
+        html += renderSection('📚 教導處', currentEvent.academic, 'bg-blue-50 border-blue-200 text-blue-800');
+      }
+
+      // 產生總務處事項區塊
+      if (currentEvent.general.length > 0) {
+        html += renderSection('🔧 總務處', currentEvent.general, 'bg-amber-50 border-amber-200 text-amber-800');
+      }
+
+      container.innerHTML = html;
+    }
+
+    function renderSection(title, list, styleClasses) {
+      const items = list.map(item => `<li class="list-disc list-inside">${item}</li>`).join('');
+      return `
+        <div class="p-2.5 rounded-lg border ${styleClasses} space-y-1">
+          <div class="font-bold border-b border-black/10 pb-1 mb-1">${title}</div>
+          <ul class="space-y-1 leading-snug">
+            ${items}
+          </ul>
+        </div>
+      `;
+    }
+
+    // 補登記表單截止日檢查邏輯
+    const recordDateInput = document.getElementById('recordDate');
+    const submitBtn = document.getElementById('submitBtn');
+    const errorAlert = document.getElementById('errorAlert');
+
+    recordDateInput.addEventListener('change', function() {
+      if (!this.value) return;
+      const recDate = new Date(this.value);
+      const today = new Date();
+      const deadline = new Date(recDate.getFullYear(), recDate.getMonth() + 1, 2, 23, 59, 59);
+
+      if (today > deadline) {
+        errorAlert.textContent = '⚠️ 該月份補登記已於次月 2 號截止，目前無法進行補登記！';
+        errorAlert.classList.remove('hidden');
+        submitBtn.disabled = true;
+      } else {
+        errorAlert.classList.add('hidden');
+        submitBtn.disabled = false;
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', renderCurrentWeekEvents);
+  </script>
+</body>
+</html>
