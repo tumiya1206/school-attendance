@@ -1,0 +1,1167 @@
+```html
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>出缺勤 Excel 轉換工具</title>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+<style>
+*{
+  box-sizing:border-box;
+}
+
+body{
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Microsoft JhengHei",
+    sans-serif;
+  background:#f5f7fb;
+  margin:0;
+  color:#222;
+}
+
+.wrap{
+  max-width:900px;
+  margin:40px auto;
+  padding:0 20px;
+}
+
+.card{
+  background:#fff;
+  border-radius:16px;
+  padding:28px;
+  box-shadow:0 6px 24px rgba(0,0,0,.08);
+}
+
+h1{
+  margin:0 0 8px;
+  font-size:28px;
+}
+
+.sub{
+  color:#666;
+  margin-bottom:24px;
+}
+
+.row{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:18px;
+}
+
+.box{
+  border:1px solid #ddd;
+  border-radius:12px;
+  padding:18px;
+  background:#fafafa;
+}
+
+label{
+  font-weight:700;
+  display:block;
+  margin-bottom:10px;
+}
+
+input[type=file]{
+  width:100%;
+  padding:8px;
+}
+
+button{
+  margin-top:22px;
+  width:100%;
+  padding:14px;
+  border:0;
+  border-radius:10px;
+  background:#2563eb;
+  color:#fff;
+  font-size:16px;
+  font-weight:700;
+  cursor:pointer;
+}
+
+button:hover{
+  background:#1d4ed8;
+}
+
+button:disabled{
+  background:#aaa;
+  cursor:not-allowed;
+}
+
+.status{
+  margin-top:18px;
+  padding:14px;
+  border-radius:10px;
+  background:#f0f4ff;
+  white-space:pre-wrap;
+  line-height:1.7;
+}
+
+.map{
+  margin-top:20px;
+}
+
+.map table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+.map th,
+.map td{
+  border:1px solid #ddd;
+  padding:7px;
+  text-align:left;
+}
+
+.map th{
+  background:#f2f2f2;
+}
+
+.note{
+  margin-top:18px;
+  color:#666;
+  font-size:13px;
+  line-height:1.7;
+}
+
+.success{
+  background:#ecfdf5;
+  color:#166534;
+}
+
+.error{
+  background:#fef2f2;
+  color:#991b1b;
+}
+
+@media(max-width:700px){
+  .row{
+    grid-template-columns:1fr;
+  }
+
+  .card{
+    padding:20px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="wrap">
+
+  <div class="card">
+
+    <h1>出缺勤 Excel 轉換工具</h1>
+
+    <div class="sub">
+      來源 Excel → 套用學校出缺席匯入格式 → 下載轉換後 Excel
+    </div>
+
+    <div class="row">
+
+      <div class="box">
+
+        <label for="source">
+          ① 要轉換的出缺勤明細
+        </label>
+
+        <input
+          id="source"
+          type="file"
+          accept=".xlsx,.xls"
+        >
+
+        <div class="note">
+          例如：民生國小出缺勤明細_2026-09.xlsx
+        </div>
+
+      </div>
+
+      <div class="box">
+
+        <label for="template">
+          ② 學校匯入模板
+        </label>
+
+        <input
+          id="template"
+          type="file"
+          accept=".xlsx,.xls"
+        >
+
+        <div class="note">
+          例如：學校版-出缺席匯入檔 v2.xlsx
+        </div>
+
+      </div>
+
+    </div>
+
+    <button id="run">
+      開始轉換並下載 Excel
+    </button>
+
+    <div id="status" class="status">
+      尚未開始。
+    </div>
+
+
+    <div class="map">
+
+      <h3>假別代碼</h3>
+
+      <table>
+
+        <tr>
+          <th>假別</th>
+          <th>代碼</th>
+        </tr>
+
+        <tr>
+          <td>事假</td>
+          <td>1</td>
+        </tr>
+
+        <tr>
+          <td>病假</td>
+          <td>2</td>
+        </tr>
+
+        <tr>
+          <td>公假</td>
+          <td>3</td>
+        </tr>
+
+        <tr>
+          <td>喪假</td>
+          <td>4</td>
+        </tr>
+
+        <tr>
+          <td>曠課</td>
+          <td>5</td>
+        </tr>
+
+        <tr>
+          <td>其他（納入畢業出席率計算）</td>
+          <td>6</td>
+        </tr>
+
+        <tr>
+          <td>其他（不納入畢業出席率計算）</td>
+          <td>7</td>
+        </tr>
+
+        <tr>
+          <td>遲到</td>
+          <td>8</td>
+        </tr>
+
+      </table>
+
+    </div>
+
+
+    <div class="note">
+
+      <b>轉換規則：</b><br>
+
+      1. 來源檔「節次」欄位只要是 V，就填入該列假別的代碼。<br>
+
+      2. 空白節次維持空白。<br>
+
+      3. 班級會自動拆成年級與班級。<br>
+
+      4. 座號會自動補成兩位數。<br>
+
+      5. 學號、姓名目前來源檔沒有，因此留空。<br>
+
+      6. 註記會填入「待補學號、姓名」。<br>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+/* =========================================================
+   假別代碼
+========================================================= */
+
+const ABSENCE_CODE = {
+
+  "事假":"1",
+
+  "病假":"2",
+
+  "公假":"3",
+
+  "喪假":"4",
+
+  "曠課":"5",
+
+  "其他(納入畢業出席率計算)":"6",
+
+  "其他（納入畢業出席率計算）":"6",
+
+  "其他(不納入畢業出席率計算)":"7",
+
+  "其他（不納入畢業出席率計算）":"7",
+
+  "遲到":"8"
+
+};
+
+
+/* =========================================================
+   工具
+========================================================= */
+
+function norm(v){
+
+  return String(v ?? "")
+    .trim();
+
+}
+
+
+/* =========================================================
+   班級轉換
+   例如：
+   三年五班 → 3 / 05
+   3年5班 → 3 / 05
+========================================================= */
+
+function classToGradeClass(v){
+
+  const s = norm(v);
+
+  const m = s.match(
+    /(\d+)年\s*([一二三四五六七八九十0-9]+)班/
+  );
+
+  if(!m){
+
+    return {
+      grade:"",
+      cls:"",
+      raw:s
+    };
+
+  }
+
+  const grade = m[1];
+
+  const c = m[2];
+
+  const map = {
+
+    "一":"01",
+    "二":"02",
+    "三":"03",
+    "四":"04",
+    "五":"05",
+    "六":"06",
+    "七":"07",
+    "八":"08",
+    "九":"09",
+    "十":"10"
+
+  };
+
+  return {
+
+    grade:grade,
+
+    cls:
+      map[c] ||
+      c.padStart(2,"0"),
+
+    raw:s
+
+  };
+
+}
+
+
+/* =========================================================
+   座號
+========================================================= */
+
+function seatToNumber(v){
+
+  const s = norm(v);
+
+  const m = s.match(/\d+/);
+
+  if(!m){
+
+    return s;
+
+  }
+
+  return m[0].padStart(2,"0");
+
+}
+
+
+/* =========================================================
+   日期轉換
+========================================================= */
+
+function excelDateToISO(v){
+
+  if(v instanceof Date && !isNaN(v)){
+
+    const y = v.getFullYear();
+
+    const m = String(
+      v.getMonth()+1
+    ).padStart(2,"0");
+
+    const d = String(
+      v.getDate()
+    ).padStart(2,"0");
+
+    return `${y}-${m}-${d}`;
+
+  }
+
+
+  const s = norm(v);
+
+
+  if(
+    /^\d{4}-\d{1,2}-\d{1,2}$/.test(s)
+  ){
+
+    const [y,m,d] = s.split("-");
+
+    return `${y}-${m.padStart(2,"0")}-${d.padStart(2,"0")}`;
+
+  }
+
+
+  if(typeof v === "number"){
+
+    const d =
+      XLSX.SSF.parse_date_code(v);
+
+    if(d){
+
+      return `${d.y}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}`;
+
+    }
+
+  }
+
+  return s;
+
+}
+
+
+/* =========================================================
+   讀取第一個工作表
+========================================================= */
+
+function readSheet(wb){
+
+  const ws =
+    wb.Sheets[wb.SheetNames[0]];
+
+  return XLSX.utils.sheet_to_json(
+    ws,
+    {
+      header:1,
+      defval:null,
+      raw:true
+    }
+  );
+
+}
+
+
+/* =========================================================
+   寫入儲存格
+========================================================= */
+
+function setCell(ws, addr, value){
+
+  if(value === null || value === undefined){
+
+    value = "";
+
+  }
+
+  ws[addr] = {
+
+    t:
+      typeof value === "number"
+      ? "n"
+      : "s",
+
+    v:value
+
+  };
+
+}
+
+
+/* =========================================================
+   欄位數字 → Excel 欄位
+   0=A
+   1=B
+   ...
+========================================================= */
+
+function colLetter(n){
+
+  let s = "";
+
+  while(n >= 0){
+
+    s =
+      String.fromCharCode(
+        n % 26 + 65
+      ) + s;
+
+    n =
+      Math.floor(n / 26) - 1;
+
+  }
+
+  return s;
+
+}
+
+
+/* =========================================================
+   下載 Excel
+========================================================= */
+
+function downloadExcel(wb, filename){
+
+  const output = XLSX.write(
+    wb,
+    {
+      bookType:"xlsx",
+      type:"array"
+    }
+  );
+
+
+  const blob = new Blob(
+    [output],
+    {
+      type:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    }
+  );
+
+
+  const url =
+    URL.createObjectURL(blob);
+
+
+  const a =
+    document.createElement("a");
+
+
+  a.href = url;
+
+  a.download = filename;
+
+  a.style.display = "none";
+
+
+  document.body.appendChild(a);
+
+  a.click();
+
+  document.body.removeChild(a);
+
+
+  setTimeout(() => {
+
+    URL.revokeObjectURL(url);
+
+  }, 3000);
+
+}
+
+
+/* =========================================================
+   主要轉換
+========================================================= */
+
+document
+  .getElementById("run")
+  .addEventListener(
+    "click",
+    async function(){
+
+      const source =
+        document
+          .getElementById("source")
+          .files[0];
+
+
+      const template =
+        document
+          .getElementById("template")
+          .files[0];
+
+
+      const status =
+        document.getElementById("status");
+
+
+      const btn =
+        document.getElementById("run");
+
+
+      /* ----------------------------------------------
+         檢查檔案
+      ---------------------------------------------- */
+
+      if(!source || !template){
+
+        status.className =
+          "status error";
+
+        status.textContent =
+          "請先選擇兩個 Excel 檔案。";
+
+        return;
+
+      }
+
+
+      btn.disabled = true;
+
+
+      status.className =
+        "status";
+
+
+      status.textContent =
+        "讀取 Excel 中……";
+
+
+      try{
+
+
+        /* ------------------------------------------
+           讀取檔案
+        ------------------------------------------ */
+
+        const srcBuf =
+          await source.arrayBuffer();
+
+
+        const tplBuf =
+          await template.arrayBuffer();
+
+
+        status.textContent =
+          "分析來源 Excel……";
+
+
+        const srcWb =
+          XLSX.read(
+            srcBuf,
+            {
+              type:"array",
+              cellDates:true
+            }
+          );
+
+
+        status.textContent =
+          "讀取學校模板……";
+
+
+        const outWb =
+          XLSX.read(
+            tplBuf,
+            {
+              type:"array",
+              cellDates:true
+            }
+          );
+
+
+        /* ------------------------------------------
+           來源資料
+        ------------------------------------------ */
+
+        const data =
+          readSheet(srcWb);
+
+
+        if(!data.length){
+
+          throw new Error(
+            "來源 Excel 沒有資料。"
+          );
+
+        }
+
+
+        const headers =
+          data[0] || [];
+
+
+        const idx = {};
+
+
+        headers.forEach(
+          (h,i) => {
+
+            idx[norm(h)] = i;
+
+          }
+        );
+
+
+        /* ------------------------------------------
+           必要欄位
+        ------------------------------------------ */
+
+        const requiredHeaders = [
+
+          "日期",
+          "班級",
+          "座號",
+          "假別",
+          "導師時間",
+          "第1節",
+          "第2節",
+          "第3節",
+          "第4節",
+          "午休",
+          "第5節",
+          "第6節",
+          "第7節"
+
+        ];
+
+
+        const missing =
+          requiredHeaders.filter(
+            h => idx[h] === undefined
+          );
+
+
+        if(missing.length){
+
+          throw new Error(
+            "來源 Excel 缺少以下欄位：\n" +
+            missing.join("、")
+          );
+
+        }
+
+
+        /* ------------------------------------------
+           取得模板
+        ------------------------------------------ */
+
+        const outSheetName =
+          outWb.SheetNames[0];
+
+
+        const ws =
+          outWb.Sheets[outSheetName];
+
+
+        if(!ws){
+
+          throw new Error(
+            "找不到模板的第一個工作表。"
+          );
+
+        }
+
+
+        /* ------------------------------------------
+           從第 5 列開始寫入
+        ------------------------------------------ */
+
+        let outputRow = 5;
+
+        let count = 0;
+
+        let badLeave = 0;
+
+        let emptyV = 0;
+
+
+        /* ------------------------------------------
+           清除模板第 5 列以後的 A:Q 資料
+        ------------------------------------------ */
+
+        for(
+          let r=5;
+          r<=2000;
+          r++
+        ){
+
+          for(
+            let c=0;
+            c<17;
+            c++
+          ){
+
+            delete ws[
+              colLetter(c) + r
+            ];
+
+          }
+
+        }
+
+
+        /* ------------------------------------------
+           節次欄位
+        ------------------------------------------ */
+
+        const colMap = {
+
+          "導師時間":6,
+
+          "第1節":7,
+
+          "第2節":8,
+
+          "第3節":9,
+
+          "第4節":10,
+
+          "午休":11,
+
+          "第5節":12,
+
+          "第6節":13,
+
+          "第7節":14
+
+        };
+
+
+        /* ------------------------------------------
+           開始逐筆處理
+        ------------------------------------------ */
+
+        for(
+          let r=1;
+          r<data.length;
+          r++
+        ){
+
+          const row = data[r];
+
+
+          if(
+            !row ||
+            row.every(
+              v =>
+                v === null ||
+                norm(v) === ""
+            )
+          ){
+
+            continue;
+
+          }
+
+
+          /* -------------------------------
+             假別
+          ------------------------------- */
+
+          const leave =
+            norm(
+              row[idx["假別"]]
+            );
+
+
+          if(!leave){
+
+            continue;
+
+          }
+
+
+          const code =
+            ABSENCE_CODE[leave];
+
+
+          if(!code){
+
+            badLeave++;
+
+            continue;
+
+          }
+
+
+          /* -------------------------------
+             班級
+          ------------------------------- */
+
+          const cc =
+            classToGradeClass(
+              row[idx["班級"]]
+            );
+
+
+          /* -------------------------------
+             座號
+          ------------------------------- */
+
+          const seat =
+            seatToNumber(
+              row[idx["座號"]]
+            );
+
+
+          /* -------------------------------
+             基本資料
+          ------------------------------- */
+
+          setCell(
+            ws,
+            `A${outputRow}`,
+            cc.grade
+          );
+
+
+          setCell(
+            ws,
+            `B${outputRow}`,
+            cc.cls
+          );
+
+
+          setCell(
+            ws,
+            `C${outputRow}`,
+            seat
+          );
+
+
+          /* 學號 */
+
+          setCell(
+            ws,
+            `D${outputRow}`,
+            ""
+          );
+
+
+          /* 姓名 */
+
+          setCell(
+            ws,
+            `E${outputRow}`,
+            ""
+          );
+
+
+          /* 日期 */
+
+          setCell(
+            ws,
+            `F${outputRow}`,
+            excelDateToISO(
+              row[idx["日期"]]
+            )
+          );
+
+
+          let has = false;
+
+
+          /* -------------------------------
+             節次
+          ------------------------------- */
+
+          for(
+            const [h,c]
+            of Object.entries(colMap)
+          ){
+
+            const value =
+              norm(
+                row[idx[h]]
+              );
+
+
+            if(
+              value.toUpperCase() === "V"
+            ){
+
+              setCell(
+                ws,
+                `${colLetter(c)}${outputRow}`,
+                code
+              );
+
+              has = true;
+
+            }
+            else{
+
+              setCell(
+                ws,
+                `${colLetter(c)}${outputRow}`,
+                ""
+              );
+
+            }
+
+          }
+
+
+          /* -------------------------------
+             如果完全沒有 V
+          ------------------------------- */
+
+          if(!has){
+
+            emptyV++;
+
+            continue;
+
+          }
+
+
+          /* -------------------------------
+             註記
+          ------------------------------- */
+
+          setCell(
+            ws,
+            `Q${outputRow}`,
+            "待補學號、姓名"
+          );
+
+
+          outputRow++;
+
+          count++;
+
+        }
+
+
+        /* ------------------------------------------
+           檔名
+        ------------------------------------------ */
+
+        const base =
+          source.name
+            .replace(
+              /\.[^.]+$/,
+              ""
+            );
+
+
+        const outName =
+          `${base}_轉換後.xlsx`;
+
+
+        /* ------------------------------------------
+           產生 Excel
+        ------------------------------------------ */
+
+        status.textContent =
+          "產生 Excel 檔案……";
+
+
+        downloadExcel(
+          outWb,
+          outName
+        );
+
+
+        /* ------------------------------------------
+           完成
+        ------------------------------------------ */
+
+        let message =
+          `完成！\n\n` +
+          `共轉換 ${count} 筆。\n` +
+          `檔案名稱：${outName}`;
+
+
+        if(badLeave){
+
+          message +=
+            `\n\n有 ${badLeave} 筆找不到假別代碼，已略過。`;
+
+        }
+
+
+        if(emptyV){
+
+          message +=
+            `\n有 ${emptyV} 筆沒有任何節次為 V，已略過。`;
+
+        }
+
+
+        message +=
+          "\n\nExcel 下載已啟動。";
+
+
+        status.className =
+          "status success";
+
+
+        status.textContent =
+          message;
+
+
+      }
+      catch(err){
+
+        console.error(err);
+
+
+        status.className =
+          "status error";
+
+
+        status.textContent =
+          "轉換失敗：\n\n" +
+          (
+            err?.message ||
+            String(err)
+          );
+
+      }
+      finally{
+
+        btn.disabled = false;
+
+      }
+
+    }
+  );
+
+</script>
+
+</body>
+</html>
+```
